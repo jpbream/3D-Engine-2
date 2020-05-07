@@ -2,7 +2,7 @@
 #include <iostream>
 #include "Renderer.h"
 #include "Mat4.h"
-#include <thread>
+#include "Manager.h"
 
 Mat4 rotation = Mat4::GetRotation(0, 0, .000001);
 Mat4 translation = Mat4::Get3DTranslation(0, 0, -4);
@@ -12,7 +12,6 @@ Mat4 view;
 float camXRot = 0;
 float camYRot = 0;
 
-//Surface texture("texture.png");
 Surface texture("texture.png");
 
 Surface posX("cube/posx.jpg");
@@ -90,226 +89,127 @@ Vec4 CubeMapPixelShader(CubeMapPixel& pixel, const Renderer::Sampler<CubeMapPixe
 	return sampler.SampleCubeMap(posX, negX, posY, negY, posZ, negZ, pixel.texel.x, pixel.texel.y, pixel.texel.z);
 }
 
-Surface* front = nullptr;
-Surface* back = nullptr;
+int indices[] = { 0, 1, 2, 0, 2, 3 };
+TestVertex vertices[] = { {Vec4(-.5, -.5, -.5, 1), Vec2(0, 1)}, {Vec4(.5, -.5, -.5, 1), Vec2(1, 1)}, {Vec4(.5, .5, -.5, 1), Vec2(1, 0)} , {Vec4(-.5, .5, -.5, 1), Vec2(0, 0)} };
 
-volatile bool shouldQuit = false;
-volatile bool drawing = false;
-volatile bool rendering = false;
+int cubeMapIndices[] = {
 
-void DrawLoop(Window& window) {
+	0, 1, 2,
+	0, 2, 3,
 
-	while (!shouldQuit) {
-		
-		drawing = true;
-		window.DrawSurface(*front);
-		drawing = false;
+	1, 5, 6,
+	1, 6, 2,
 
-		while (rendering);
-	}
-	std::cout << "Stopping Thread" << std::endl;
-}
+	3, 6, 7,
+	3, 2, 6,
 
-int main(int arc, char* argv[]) {
+	4, 1, 0,
+	4, 5, 1,
 
-	//double testStart = SDL_GetPerformanceCounter();
-	////
+	0, 3, 7,
+	0, 7, 4,
 
-	//texture.GenerateMipMaps();
-	//texture.Tint({ 1, 0, 0, 1 }, 0.2);
+	4, 7, 6,
+	4, 6, 5
 
-	////
-	////std::cout << (SDL_GetPerformanceCounter() - testStart) / SDL_GetPerformanceFrequency() << " seconds" << std::endl;
-	//return 0;
-	
-	
-	//texture.RotateLeft();
+};
+CubeMapVertex cubeMapVerts[] = { {Vec4(-.5, -.5, -.5, 1)}, {Vec4(.5, -.5, -.5, 1)}, {Vec4(.5, .5, -.5, 1)} , {Vec4(-.5, .5, -.5, 1)},
+							   {Vec4(-.5, -.5, .5, 1)}, {Vec4(.5, -.5, .5, 1)}, {Vec4(.5, .5, .5, 1)} , {Vec4(-.5, .5, .5, 1)} };
 
-	texture.GenerateMipMaps();
-	texture.Tint({1, 0, 0, 1}, 0.2);
-	unsigned int numThreads = std::thread::hardware_concurrency();
-	std::cout << numThreads << " Threads" << std::endl;
+bool RenderLogic(Surface& backBuffer, Renderer& renderer, float deltaTime) {
 
-	SDL_Log("Starting the Engine");
-	Instance::Init();
 
-	SDL_DisplayMode current;
-	SDL_GetCurrentDisplayMode(0, &current);
-
-	Window window("My Window", 1000, 20, 750, 750, 0);
-	Surface surface1(window.GetWidth(), window.GetHeight());
-	Surface surface2(window.GetWidth(), window.GetHeight());
-
-	projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
-
-	int mouseX = 0;
-	int mouseY = 0;
-
-	int relX = 0;
-	int relY = 0;
-
-	Vec3 red(1, 0, 0);
-
-	front = &surface1;
-	back = &surface2;
-
-	Renderer renderer(*back);
-	renderer.ClearFlags(RF_BACKFACE_CULL);
-
-	int indices[] = { 0, 1, 2, 0, 2, 3 };
-	TestVertex vertices[] = { {Vec4(-.5, -.5, -.5, 1), Vec2(0, 1)}, {Vec4(.5, -.5, -.5, 1), Vec2(1, 1)}, {Vec4(.5, .5, -.5, 1), Vec2(1, 0)} , {Vec4(-.5, .5, -.5, 1), Vec2(0, 0)} };
-
-	int cubeMapIndices[] = {
-	
-		0, 1, 2,
-		0, 2, 3,
-
-		1, 5, 6,
-		1, 6, 2,
-
-		3, 6, 7,
-		3, 2, 6,
-
-		4, 1, 0,
-		4, 5, 1,
-
-		0, 3, 7,
-		0, 7, 4,
-
-		4, 7, 6,
-		4, 6, 5
-	
-	};
-	CubeMapVertex cubeMapVerts[] = { {Vec4(-.5, -.5, -.5, 1)}, {Vec4(.5, -.5, -.5, 1)}, {Vec4(.5, .5, -.5, 1)} , {Vec4(-.5, .5, -.5, 1)},
-	                               {Vec4(-.5, -.5, .5, 1)}, {Vec4(.5, -.5, .5, 1)}, {Vec4(.5, .5, .5, 1)} , {Vec4(-.5, .5, .5, 1)} };
-	
 	float r = 0.1;
 
-	std::thread drawLoop(DrawLoop, std::ref(window));
+	int numKeys;
+	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
 
-	float deltaTime = 0;
-
-	while (!shouldQuit) {
-
-		static int frames = 0;
-		static double totalTime = 0;
-		Uint64 start = SDL_GetPerformanceCounter();
-
-		static double totalRenderTime = 0;
-
-		rendering = true;
-		Uint64 renderStart = SDL_GetPerformanceCounter();
-
-		SDL_GetMouseState(&mouseX, &mouseY);
-
-		int numKeys;
-		const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
-
-		if (keyboard[SDL_SCANCODE_Q]) {
-			r -= .8 * deltaTime;
-		}
-		if (keyboard[SDL_SCANCODE_E]) {
-			r += .8 * deltaTime;
-		}
-		if (keyboard[SDL_SCANCODE_W]) {
-			translation(2, 3) -= .5 * deltaTime;
-		}
-		if (keyboard[SDL_SCANCODE_S]) {
-			translation(2, 3) += .5 * deltaTime;
-		}
-
-		if (keyboard[SDL_SCANCODE_A]) {
-			translation(0, 3) -= .5 * deltaTime;
-		}
-		if (keyboard[SDL_SCANCODE_D]) {
-			translation(0, 3) += .5 * deltaTime;
-		}
-
-		if (keyboard[SDL_SCANCODE_R]) {
-			translation(1, 3) -= .5 * deltaTime;
-		}
-		if (keyboard[SDL_SCANCODE_F]) {
-			translation(1, 3) += .5 * deltaTime;
-		}
-
-		if (keyboard[SDL_SCANCODE_I]) {
-			SDL_SetRelativeMouseMode(SDL_TRUE);
-		}
-		if (keyboard[SDL_SCANCODE_O]) {
-			SDL_SetRelativeMouseMode(SDL_FALSE);
-		}
-
-		
-
-		//r = 3.14159 / 3;
-		//translation(2, 3) = -.2;
-		//r += deltaTime;
-		rotation = Mat4::GetRotation(0, r, 0);
-		renderer.SetRenderTarget(*back);
-		back->BlackOut();
-		//renderer.DrawElementArray<TestVertex, TestPixel>(2, indices, vertices, TestVertexShader, TestPixelShader);
-		renderer.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
-		renderer.ClearZBuffer();
-		back->Tint({1, 0, 0, 1}, 0.2);
-		back->RotateRight();
-		std::swap(front, back);
-		
-
-		Uint64 renderEnd = SDL_GetPerformanceCounter();
-
-		totalRenderTime += (renderEnd - renderStart) / (double)SDL_GetPerformanceFrequency();
-
-		rendering = false;
-		while (drawing);
-
-		Uint64 end = SDL_GetPerformanceCounter();
-		static Uint64 interval = SDL_GetPerformanceFrequency();
-
-		frames++;
-		deltaTime = (end - start) / (double)interval;
-		totalTime += deltaTime;
-
-		if (totalTime > 1.0) {
-			std::cout << "Frame Time: " << totalTime * 1000 / frames << " ms.   " << frames << " frames.   " << totalRenderTime * 1000 / frames << " ms render time.   (" << (int)(totalRenderTime * 100 / totalTime) << "%)" << std::endl;
-			frames = 0;
-			totalTime = 0;
-			totalRenderTime = 0;
-		}
-
-		SDL_Event event = {};
-		while (SDL_PollEvent(&event)) {
-
-			switch (event.type) {
-
-			case SDL_QUIT:
-				shouldQuit = true;
-				break;
-
-			case SDL_MOUSEMOTION:
-				relX = event.motion.xrel;
-				relY = event.motion.yrel;
-
-				if ((relX != 0 || relY != 0) && SDL_GetRelativeMouseMode() == SDL_TRUE) {
-
-					camXRot -= relY / 2 * 3.14159 / 360;
-					camYRot -= relX / 2 * 3.14159 / 360;
-
-					view = Mat4::GetRotation(camXRot, camYRot, 0);
-					view = view.GetInverse();
-
-				}
-
-				break;
-			}
-			
-
-
-		}
-
+	if (keyboard[SDL_SCANCODE_Q]) {
+		r -= .8 * deltaTime;
+	}
+	if (keyboard[SDL_SCANCODE_E]) {
+		r += .8 * deltaTime;
+	}
+	if (keyboard[SDL_SCANCODE_W]) {
+		translation(2, 3) -= .5 * deltaTime;
+	}
+	if (keyboard[SDL_SCANCODE_S]) {
+		translation(2, 3) += .5 * deltaTime;
 	}
 
-	drawLoop.join();
+	if (keyboard[SDL_SCANCODE_A]) {
+		translation(0, 3) -= .5 * deltaTime;
+	}
+	if (keyboard[SDL_SCANCODE_D]) {
+		translation(0, 3) += .5 * deltaTime;
+	}
 
-	Instance::Quit();
+	if (keyboard[SDL_SCANCODE_R]) {
+		translation(1, 3) -= .5 * deltaTime;
+	}
+	if (keyboard[SDL_SCANCODE_F]) {
+		translation(1, 3) += .5 * deltaTime;
+	}
+
+	if (keyboard[SDL_SCANCODE_I]) {
+		SDL_SetRelativeMouseMode(SDL_TRUE);
+	}
+	if (keyboard[SDL_SCANCODE_O]) {
+		SDL_SetRelativeMouseMode(SDL_FALSE);
+	}
+
+	rotation = Mat4::GetRotation(0, r, 0);
+		
+	//renderer.DrawElementArray<TestVertex, TestPixel>(2, indices, vertices, TestVertexShader, TestPixelShader);
+	renderer.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
+		
+
+	SDL_Event event = {};
+	while (SDL_PollEvent(&event)) {
+
+		switch (event.type) {
+
+		case SDL_QUIT:
+			return true;
+			break;
+
+		case SDL_MOUSEMOTION:
+
+			if ((event.motion.xrel != 0 || event.motion.yrel != 0) && SDL_GetRelativeMouseMode() == SDL_TRUE) {
+
+				camXRot -= event.motion.yrel / 2 * 3.14159 / 360;
+				camYRot -= event.motion.xrel / 2 * 3.14159 / 360;
+
+				view = Mat4::GetRotation(camXRot, camYRot, 0);
+				view = view.GetInverse();
+
+			}
+
+			break;
+		}
+			
+	}
+
+}
+
+
+int main(int argc, char* argv[]) {
+
+	Instance::Init();
+
+	texture.GenerateMipMaps();
+	texture.Tint({ 1, 0, 0, 1 }, 0.2);
+	
+	//Window window("My Window", 1000, 20, 750, 750, 0);
+
+	//projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
+
+	//StartDoubleBufferedInstance(window, RenderLogic, RF_BILINEAR | RF_MIPMAP | RF_TRILINEAR);
+
+	projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, 2160.0 / 3840, -2160.0 / 3840);
+	Surface s(3840, 2160);
+	Renderer r(s);
+	r.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
+
 	return 0;
 }

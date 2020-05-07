@@ -916,7 +916,7 @@ public:
 
 				//threads.emplace_back(&Renderer::DrawTriangle<Pixel>, this, processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader);
 				threads.emplace_back(&Renderer::ClipAndDrawTriangle<Pixel>, this, std::ref(processedVertices[i1]), std::ref(processedVertices[i2]), std::ref(processedVertices[i3]), PixelShader, 0);
-
+				
 			}
 			else {
 				//DrawTriangle<Pixel>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader);

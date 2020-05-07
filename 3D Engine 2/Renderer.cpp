@@ -3,8 +3,6 @@
 
 Renderer::Renderer(Surface& renderTarget) : pRenderTarget(&renderTarget), zBuffer(renderTarget.GetWidth(), renderTarget.GetHeight()) {
 
-	flags |= RF_BACKFACE_CULL | RF_BILINEAR | RF_MIPMAP | RF_TRILINEAR;
-
 	zBuffer.WhiteOut();
 
 }

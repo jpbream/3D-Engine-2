@@ -1,7 +1,8 @@
 #pragma once
 #include "Window.h"
 #include "Surface.h"
+#include "Renderer.h"
 
 #define DIAGNOSTICS
 
-void StartDoubleBufferedInstance(const Window& window, bool (*ProgramLogic)(Surface* pBackBuffer, float deltaTime));
+void StartDoubleBufferedInstance(Window& window, bool (*ProgramLogic)(Surface& backBuffer, Renderer& renderer, float deltaTime), short renderFlags);

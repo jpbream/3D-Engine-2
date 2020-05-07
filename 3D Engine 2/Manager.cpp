@@ -27,7 +27,7 @@ static void DrawLoop() {
 	}
 }
 
-void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface* pBackBuffer, float deltaTime))
+void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& backBuffer, Renderer& renderer, float deltaTime), short renderFlags)
 {
 	pWindow = &window;
 
@@ -36,6 +36,9 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface* pB
 
 	pFrontBuffer = &s1;
 	pBackBuffer = &s2;
+
+	Renderer renderer(*pBackBuffer);
+	renderer.SetFlags(renderFlags);
 
 	// start the drawing loop in a new thread
 	std::thread drawLoop(DrawLoop);
@@ -57,10 +60,13 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface* pB
 		pBackBuffer->BlackOut();
 
 		// call the program and render logic
-		shouldQuit = ProgramLogic(pBackBuffer, deltaTime);
+		shouldQuit = ProgramLogic(*pBackBuffer, renderer, deltaTime);
+
+		renderer.ClearZBuffer();
 
 		//swap the buffers
 		std::swap(pFrontBuffer, pBackBuffer);
+		renderer.SetRenderTarget(*pBackBuffer);
 
 #ifdef DIAGNOSTICS
 		Uint64 renderEnd = SDL_GetPerformanceCounter();
