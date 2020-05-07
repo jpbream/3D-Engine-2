@@ -2,6 +2,7 @@
 #include <memory>
 #include <SDL.h>
 #include "STB_Image_Wrapper.h"
+#include <immintrin.h>
 
 Surface::Surface(int width, int height) : width(width), height(height) {
 
@@ -361,6 +362,26 @@ void Surface::RotateLeft() {
 	if (mipMap != nullptr)
 		mipMap->RotateLeft();
 
+}
+
+void Surface::Tint(const Vec4& target, float alpha)
+{
+
+	if (alpha < 0)
+		alpha = 0;
+	if (alpha > 1)
+		alpha = 1;
+
+	for (int* traveler = pPixels; traveler < pPixels + width * height; ++traveler) {
+
+		Vec4 tint = EXPAND4(*traveler) * (1 - alpha) + target * alpha;
+		*traveler = COMPRESS4(tint);
+
+	}
+
+	//apply operation to mip map as well
+	if (mipMap != nullptr)
+		mipMap->Tint(target, alpha);
 }
 
 void Surface::DeleteMipMaps() {

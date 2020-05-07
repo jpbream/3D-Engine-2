@@ -4,6 +4,18 @@
 #include "Vec4.h"
 #include "Vec3.h"
 
+// returns an integer color value from a Vec4
+#define COMPRESS4(v) ((int)(v.r * 255) | (int)(v.g * 255) << 8 | (int)(v.b * 255) << 16 | (int)(v.a * 255) << 24)
+
+// returns an integer color value from a Vec3
+#define COMPRESS3(v) ((int)(v.r * 255) | (int)(v.g * 255) << 8 | (int)(v.b * 255) << 16 | (unsigned char)-1 << 24)
+
+// returns a Vec4 from an integer color value
+#define EXPAND4(i) Vec4((i & rMask) / 255.0f, ((i & gMask) >> 8) / 255.0f, ((i & bMask) >> 16) / 255.0f, ((i & aMask) >> 24) / 255.0f )
+
+// returns a Vec3 from an integer color value
+#define EXPAND3(i) Vec3((i & rMask) / 255.0f, ((i & gMask) >> 8) / 255.0f, ((i & bMask) >> 16) / 255.0f )
+
 class Surface
 {
 private:
@@ -18,8 +30,6 @@ private:
 	unsigned int gMask;
 	unsigned int bMask;
 
-	//int numMipMaps = 0;
-	//Surface** mipMaps = nullptr;
 	Surface* mipMap = nullptr;
 
 	std::string GetAllocationString() const;
@@ -67,22 +77,24 @@ public:
 	void RotateRight();
 	void RotateLeft();
 
+	void Tint(const Vec4& target, float alpha);
+
 	inline const Vec4& GetPixel(int x, int y) const {
 
 		int color = pPixels[width * y + x];
-		return { (color & rMask) / 255.0f, ((color & gMask) >> 8) / 255.0f, ((color & bMask) >> 16) / 255.0f, ((color & aMask) >> 24) / 255.0f };
+		return EXPAND4(color);
 
 	}
 
 	inline void PutPixel(int x, int y, const Vec4& v) {
 
-		pPixels[width * y + x] = (int)(v.r * 255) | (int)(v.g * 255) << 8 | (int)(v.b * 255) << 16 | (int)(v.a * 255) << 24;
+		pPixels[width * y + x] = COMPRESS4(v);
 
 	}
 
 	inline void PutPixel(int x, int y, const Vec3& v) {
 
-		pPixels[width * y + x] = (int)(v.r * 255) | (int)(v.g * 255) << 8 | (int)(v.b * 255) << 16 | (unsigned char)-1 << 24;
+		pPixels[width * y + x] = COMPRESS3(v);
 
 	}
 

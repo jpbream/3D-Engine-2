@@ -115,21 +115,18 @@ int main(int arc, char* argv[]) {
 	//double testStart = SDL_GetPerformanceCounter();
 	////
 
-	//TestPixel p[2] = { {Vec4(-.5, -.5, 0, 1), Vec2(0, 0)}, {Vec4(.5, -.5, 0, 1), Vec2(1, 0)} };
-	//Vec4 n = { 1.232, 12.3242342, 23.234234, 23.348503 };
-	//Vec4 l = {2342.34234, 23423.23423, 90.2830492, 1.203475};
-	//for (int i = 0; i < 1000000; ++i)
-	//	//TestPixel a = p[0] * (1 - .23423) + p[1] * .23423;
-	//	TestPixel a = Renderer::Lerp(p[0], p[1], .23423);
-	//	//Vec4 d = n * (1 - .23235) + l * .23235;
-	//	//Vec4 d = Renderer::Lerp(n, l, .23235);
+	//texture.GenerateMipMaps();
+	//texture.Tint({ 1, 0, 0, 1 }, 0.2);
 
 	////
-	//std::cout << (SDL_GetPerformanceCounter() - testStart) / SDL_GetPerformanceFrequency();
+	////std::cout << (SDL_GetPerformanceCounter() - testStart) / SDL_GetPerformanceFrequency() << " seconds" << std::endl;
 	//return 0;
-	texture.GenerateMipMaps();
+	
+	
 	//texture.RotateLeft();
 
+	texture.GenerateMipMaps();
+	texture.Tint({1, 0, 0, 1}, 0.2);
 	unsigned int numThreads = std::thread::hardware_concurrency();
 	std::cout << numThreads << " Threads" << std::endl;
 
@@ -248,14 +245,15 @@ int main(int arc, char* argv[]) {
 		//translation(2, 3) = -.2;
 		//r += deltaTime;
 		rotation = Mat4::GetRotation(0, r, 0);
-
+		renderer.SetRenderTarget(*back);
 		back->BlackOut();
 		//renderer.DrawElementArray<TestVertex, TestPixel>(2, indices, vertices, TestVertexShader, TestPixelShader);
 		renderer.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
 		renderer.ClearZBuffer();
-
+		back->Tint({1, 0, 0, 1}, 0.2);
+		back->RotateRight();
 		std::swap(front, back);
-		renderer.SetRenderTarget(*back);
+		
 
 		Uint64 renderEnd = SDL_GetPerformanceCounter();
 
