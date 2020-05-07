@@ -587,14 +587,14 @@ private:
 		}
 
 		//calculate pixel coordinates
-		Vec2 v1Screen(((p1.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
-			((-p1.GetPos().y + 1.0) * (pRenderTarget->GetHeight() - 1) / 2));
+		Vec2 v1Screen(((p1.GetPos().x + 1.0) * (pRenderTarget->GetWidth()) / 2),
+			((-p1.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
 
-		Vec2 v2Screen(((p2.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
-			((-p2.GetPos().y + 1.0) * (pRenderTarget->GetHeight() - 1) / 2));
+		Vec2 v2Screen(((p2.GetPos().x + 1.0) * (pRenderTarget->GetWidth()) / 2),
+			((-p2.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
 
-		Vec2 v3Screen(((p3.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
-			((-p3.GetPos().y + 1.0) * (pRenderTarget->GetHeight() - 1) / 2));
+		Vec2 v3Screen(((p3.GetPos().x + 1.0) * (pRenderTarget->GetWidth()) / 2),
+			((-p3.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
 
 		// if wireframe mode is enabled
 		if (flags & RF_WIREFRAME) {

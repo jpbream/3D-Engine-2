@@ -177,8 +177,8 @@ bool RenderLogic(Surface& backBuffer, Renderer& renderer, float deltaTime) {
 
 			if ((event.motion.xrel != 0 || event.motion.yrel != 0) && SDL_GetRelativeMouseMode() == SDL_TRUE) {
 
-				camXRot -= event.motion.yrel / 2 * 3.14159 / 360;
-				camYRot -= event.motion.xrel / 2 * 3.14159 / 360;
+				camXRot -= event.motion.yrel * PI / 720;
+				camYRot -= event.motion.xrel * PI / 720;
 
 				view = Mat4::GetRotation(camXRot, camYRot, 0);
 				view = view.GetInverse();
@@ -200,16 +200,25 @@ int main(int argc, char* argv[]) {
 	texture.GenerateMipMaps();
 	texture.Tint({ 1, 0, 0, 1 }, 0.2);
 	
-	//Window window("My Window", 1000, 20, 750, 750, 0);
+	Window window("My Window", 100, 20, 1920, 1080, 0);
 
-	//projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
+	projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
 
-	//StartDoubleBufferedInstance(window, RenderLogic, RF_BILINEAR | RF_MIPMAP | RF_TRILINEAR);
+	StartDoubleBufferedInstance(window, RenderLogic, RF_BILINEAR | RF_MIPMAP | RF_TRILINEAR);
 
-	projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, 2160.0 / 3840, -2160.0 / 3840);
-	Surface s(3840, 2160);
-	Renderer r(s);
-	r.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
+	//projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, 2160.0 / 3840, -2160.0 / 3840);
+	//Surface s("images/Features.jpg");
+	//Renderer r(s);
+	//r.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
+
+	//s.SetContrast(1);
+	//s.Resize(1920, 1080, true);
+	//s.Rescale(0.1, 0.1);
+	//s.Invert();
+	//s.GaussianBlur(2, 1, Surface::BLUR_BOTH);
+	//s.SaveToFile("images/blur.bmp");
+	//window.DrawSurface(s);
+	//window.BlockUntilQuit();
 
 	return 0;
 }

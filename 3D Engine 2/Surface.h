@@ -4,6 +4,8 @@
 #include "Vec4.h"
 #include "Vec3.h"
 
+# define PI 3.14159265358979323846
+
 // returns an integer color value from a Vec4
 #define COMPRESS4(v) ((int)(v.r * 255) | (int)(v.g * 255) << 8 | (int)(v.b * 255) << 16 | (int)(v.a * 255) << 24)
 
@@ -58,7 +60,8 @@ public:
 	int GetAMask() const;
 	int GetBufferSize() const;
 
-	void Resize(int width, int height);
+	void Resize(int width, int height, bool maintainImage);
+	void Rescale(float xScale, float yScale);
 	void SetColorMasks(int aMask, int rMask, int gMask, int bMask);
 
 	void SaveToFile(const std::string& filename) const;
@@ -78,6 +81,17 @@ public:
 	void RotateLeft();
 
 	void Tint(const Vec4& target, float alpha);
+
+	enum {
+		BLUR_VERTICAL,
+		BLUR_HORIZONTAL,
+		BLUR_BOTH
+	};
+
+	void GaussianBlur(int kernelSize, float stdDev, int blurType);
+
+	void Invert();
+	void SetContrast(float contrast);
 
 	inline const Vec4& GetPixel(int x, int y) const {
 

@@ -31,8 +31,8 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& ba
 {
 	pWindow = &window;
 
-	Surface s1(window.GetWidth(), window.GetHeight());
-	Surface s2(window.GetWidth(), window.GetHeight());
+	Surface s1(window.GetWidth() * REL_RES, window.GetHeight() * REL_RES);
+	Surface s2(window.GetWidth() * REL_RES, window.GetHeight() * REL_RES);
 
 	pFrontBuffer = &s1;
 	pBackBuffer = &s2;
@@ -102,4 +102,53 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& ba
 	}
 
 	drawLoop.join();
+}
+
+void StartSingleBufferedInstance(Window& window, bool (*ProgramLogic)(Surface& backBuffer, Renderer& renderer, float deltaTime), short renderFlags) {
+
+	Surface screenBuffer(window.GetWidth() * REL_RES, window.GetHeight() * REL_RES);
+
+	Renderer renderer(screenBuffer);
+	renderer.SetFlags(renderFlags);
+
+	float deltaTime = 0;
+	while (!shouldQuit) {
+
+#ifdef DIAGNOSTICS
+		static int frames = 0;
+		static double totalTime = 0;
+#endif
+
+		Uint64 start = SDL_GetPerformanceCounter();
+
+		//clear the buffer about to be drawn to
+		screenBuffer.BlackOut();
+
+		// call the program and render logic
+		shouldQuit = ProgramLogic(screenBuffer, renderer, deltaTime);
+
+		renderer.ClearZBuffer();
+
+		// draw the frame buffer to the window
+		window.DrawSurface(screenBuffer);
+
+		Uint64 end = SDL_GetPerformanceCounter();
+		static Uint64 interval = SDL_GetPerformanceFrequency();
+
+		deltaTime = (end - start) / (double)interval;
+
+#ifdef DIAGNOSTICS
+		totalTime += deltaTime;
+		frames++;
+
+		if (totalTime > 1.0) {
+			std::cout << "Frame Time: " << totalTime * 1000 / frames << " ms.   "
+				<< frames << " frames.   " << std::endl;
+			frames = 0;
+			totalTime = 0;
+		}
+#endif
+
+	}
+
 }
