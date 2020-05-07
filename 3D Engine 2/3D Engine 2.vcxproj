@@ -124,7 +124,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>$(SolutionDir)Dependencies\SDL2.lib;$(SolutionDir)Dependencies\SDL2main.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(SolutionDir)Dependencies\SDL2.lib;$(SolutionDir)Dependencies\SDL2main.lib;$(SolutionDir)Dependencies\assimp-vc142-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
@@ -153,7 +153,6 @@
     <ClCompile Include="Mat2.cpp" />
     <ClCompile Include="Mat3.cpp" />
     <ClCompile Include="Mat4.cpp" />
-    <ClCompile Include="Model.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="STB_Image_Wrapper.cpp" />
     <ClCompile Include="Surface.cpp" />
@@ -169,7 +168,6 @@
     <ClInclude Include="Mat2.h" />
     <ClInclude Include="Mat3.h" />
     <ClInclude Include="Mat4.h" />
-    <ClInclude Include="Model.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="STB_Image_Wrapper.h" />
     <ClInclude Include="Surface.h" />
