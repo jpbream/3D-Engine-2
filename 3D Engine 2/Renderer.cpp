@@ -3,8 +3,13 @@
 
 Renderer::Renderer(Surface& renderTarget) : pRenderTarget(&renderTarget), zBuffer(renderTarget.GetWidth(), renderTarget.GetHeight()) {
 
-	zBuffer.WhiteOut();
+	depthBuffer = new float[renderTarget.GetWidth() * renderTarget.GetHeight()];
+	ClearZBuffer();
 
+}
+
+Renderer::~Renderer() {
+	delete[] depthBuffer;
 }
 
 void Renderer::SetRenderTarget(Surface& renderTarget) {
@@ -17,18 +22,17 @@ void Renderer::SetRenderTarget(Surface& renderTarget) {
 
 bool Renderer::TestAndSetPixel(int x, int y, float normalizedDepth) {
 
-	if (normalizedDepth < zBuffer.GetPixel(x, y).r) {
-
-		zBuffer.PutPixel(x, y, normalizedDepth);
+	if (normalizedDepth < depthBuffer[y * pRenderTarget->GetWidth() + x]) {
+		depthBuffer[y * pRenderTarget->GetWidth() + x] = normalizedDepth;
 		return true;
-
 	}
 	return false;
 }
 
 void Renderer::ClearZBuffer() {
 
-	zBuffer.WhiteOut();
+	// random float I found that is a super big number 0x7a7a7a7a
+	memset(depthBuffer, 0x7a, pRenderTarget->GetWidth() * pRenderTarget->GetHeight() * sizeof(float));
 
 }
 

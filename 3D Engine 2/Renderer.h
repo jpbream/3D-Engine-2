@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <thread>
 #include <vector>
+#include <SDL.h>
 
 #ifndef _DEBUG
 #define THREADS (std::thread::hardware_concurrency() - 2) / 2
@@ -381,7 +382,14 @@ private:
 	float near = 1;
 	float far = 100;
 
+	float* depthBuffer;
+
 	short flags = 0;
+
+	// don't want to use threads for large models
+	// creating many of them kills performance
+	// they are good for cube maps
+	bool usingThreads = false;
 
 	template <class Pixel>
 	void ClipAndDrawTriangle(Pixel& p1, Pixel& p2, Pixel& p3, PS_POINTER(PixelShader), int iteration) {
@@ -587,13 +595,13 @@ private:
 		}
 
 		//calculate pixel coordinates
-		Vec2 v1Screen(((p1.GetPos().x + 1.0) * (pRenderTarget->GetWidth()) / 2),
+		Vec2 v1Screen(((p1.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
 			((-p1.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
 
-		Vec2 v2Screen(((p2.GetPos().x + 1.0) * (pRenderTarget->GetWidth()) / 2),
+		Vec2 v2Screen(((p2.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
 			((-p2.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
 
-		Vec2 v3Screen(((p3.GetPos().x + 1.0) * (pRenderTarget->GetWidth()) / 2),
+		Vec2 v3Screen(((p3.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
 			((-p3.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
 
 		// if wireframe mode is enabled
@@ -652,29 +660,42 @@ private:
 
 			// cut is on the right
 #ifndef _DEBUG
-			std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
+			if (usingThreads) {
+
+				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
+				DrawFlatTop(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+				flatBottom.join();
+			}
+			else {
+
+				DrawFlatBottom(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
+				DrawFlatTop(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+			}
 #else
 			DrawFlatBottom(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
-#endif
 			DrawFlatTop(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
-
-#ifndef _DEBUG
-			flatBottom.join();
 #endif
+	
 		}
 		else {
 
 			// cut is on the left
 #ifndef _DEBUG
-			std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
+			if (usingThreads) {
+
+				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
+				DrawFlatTop(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+				flatBottom.join();
+			}
+			else {
+				DrawFlatBottom(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
+				DrawFlatTop(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+			}
 #else
 			DrawFlatBottom(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
-#endif
 			DrawFlatTop(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
-
-#ifndef _DEBUG
-			flatBottom.join();
 #endif
+
 		}
 
 		// if outlines mode is enabled
@@ -868,6 +889,7 @@ private:
 public:
 
 	Renderer(Surface& renderTarget);
+	~Renderer();
 
 	void SetRenderTarget(Surface& renderTarget);
 
@@ -879,6 +901,9 @@ public:
 
 		std::vector<std::thread> threads;
 		std::unordered_map<int, Pixel> processedVertices;
+
+		if (numIndexGroups < 20)
+			usingThreads = true;
 
 		for (int i = 0; i < numIndexGroups; ++i) {
 
@@ -910,9 +935,9 @@ public:
 				}
 
 			}
-
+			
 			// if we have enough resources to draw this triangle in a new thread, do so
-			if (threads.size() < THREADS) {
+			if (threads.size() < THREADS && usingThreads) {
 
 				//threads.emplace_back(&Renderer::DrawTriangle<Pixel>, this, processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader);
 				threads.emplace_back(&Renderer::ClipAndDrawTriangle<Pixel>, this, std::ref(processedVertices[i1]), std::ref(processedVertices[i2]), std::ref(processedVertices[i3]), PixelShader, 0);
@@ -922,6 +947,7 @@ public:
 				//DrawTriangle<Pixel>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader);
 				ClipAndDrawTriangle<Pixel>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
 			}
+			
 
 		}
 
@@ -929,6 +955,7 @@ public:
 		for (int i = 0; i < threads.size(); i++)
 			threads[i].join();
 		
+		usingThreads = false;
 	}
 
 	void ClearZBuffer();

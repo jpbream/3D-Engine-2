@@ -12,6 +12,8 @@ static volatile bool shouldQuit = false;
 
 static Window* pWindow = nullptr;
 
+static void (*PostProcessingFunc)(Surface& frontBuffer);
+
 static void DrawLoop() {
 
 	// while the render loop has not signaled
@@ -19,6 +21,11 @@ static void DrawLoop() {
 	while (!shouldQuit) {
 
 		drawing = true;
+
+		// call the post processing function
+		PostProcessingFunc(*pFrontBuffer);
+
+		// draw to the window
 		pWindow->DrawSurface(*pFrontBuffer);
 		drawing = false;
 
@@ -27,7 +34,7 @@ static void DrawLoop() {
 	}
 }
 
-void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& backBuffer, Renderer& renderer, float deltaTime), short renderFlags)
+void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& backBuffer, Renderer& renderer, float deltaTime), void (*PostProcessing)(Surface& frontBuffer), short renderFlags)
 {
 	pWindow = &window;
 
@@ -39,6 +46,8 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& ba
 
 	Renderer renderer(*pBackBuffer);
 	renderer.SetFlags(renderFlags);
+
+	PostProcessingFunc = PostProcessing;
 
 	// start the drawing loop in a new thread
 	std::thread drawLoop(DrawLoop);
@@ -64,19 +73,21 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& ba
 
 		renderer.ClearZBuffer();
 
-		//swap the buffers
-		std::swap(pFrontBuffer, pBackBuffer);
-		renderer.SetRenderTarget(*pBackBuffer);
-
 #ifdef DIAGNOSTICS
 		Uint64 renderEnd = SDL_GetPerformanceCounter();
 		totalRenderTime += (renderEnd - start) / (double)SDL_GetPerformanceFrequency();
 #endif
 
-		rendering = false;
-		
-		// wait for the drawing to finish
+		// if drawing is not done, it is taking longer than render
+		// wait for drawing to finish before swapping the buffers,
+
 		while (drawing);
+
+		// swap the buffers
+		std::swap(pFrontBuffer, pBackBuffer);
+		renderer.SetRenderTarget(*pBackBuffer);
+
+		rendering = false;
 
 		Uint64 end = SDL_GetPerformanceCounter();
 		static Uint64 interval = SDL_GetPerformanceFrequency();
