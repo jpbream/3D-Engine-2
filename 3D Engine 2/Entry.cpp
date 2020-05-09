@@ -3,7 +3,7 @@
 #include "Renderer.h"
 #include "Mat4.h"
 #include "Manager.h"
-
+#include "Cubemap.h"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -11,7 +11,6 @@
 Mat4 rotation = Mat4::GetRotation(0, 0, .000001);
 Mat4 translation = Mat4::Get3DTranslation(0, 0, -10);
 Mat4 scale = Mat4::GetScale(1, 1, 1);
-Mat4 cubeScale = Mat4::GetScale(50, 50, 50);
 Mat4 projection;
 Mat4 view;
 float camXRot = 0;
@@ -19,12 +18,12 @@ float camYRot = 0;
 
 Surface texture("texture.png");
 
-Surface posX("cube/posx.jpg");
-Surface negX("cube/negx.jpg");
-Surface posY("cube/posy.jpg");
-Surface negY("cube/negy.jpg");
-Surface posZ("cube/posz.jpg");
-Surface negZ("cube/negz.jpg");
+Cubemap cb("cube/posx.jpg", 
+	"cube/negx.jpg", 
+	"cube/posy.jpg", 
+	"cube/negy.jpg", 
+	"cube/posz.jpg", 
+	"cube/negz.jpg");
 
 class TestVertex {
 
@@ -42,6 +41,7 @@ class TestPixel : public Renderer::PixelShaderInput {
 public:
 	Vec4 position;
 	Vec3 normal;
+	Vec3 worldPos;
 
 	TestPixel() {}
 	TestPixel(const Vec4& v, const Vec3& normal) : position(v), normal(normal) {}
@@ -51,14 +51,16 @@ public:
 	}
 
 };
-
-Mat4 transformation;
 TestPixel TestVertexShader(TestVertex& vertex) {
 
-	Vec4 thing = transformation * vertex.position;
+	Vec4 worldPos = view * translation * rotation * scale * vertex.position;
+	Vec4 thing = projection * worldPos;
 	Vec3 norm = rotation.Truncate() * vertex.normal;
 
-	return { thing, norm };
+	TestPixel tp(thing, norm);
+	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
+
+	return tp;
 
 }
 
@@ -67,67 +69,18 @@ Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampl
 	//return texture.GetPixel(pixel.texel.x * (texture.GetWidth() - 1), pixel.texel.y * (texture.GetHeight() - 1));
 	//return sampler2d.SampleTex2D(texture, 5);
 
-	float dot = (pixel.normal * Vec3(0, 0, 1));
-	if (dot < 0)
-		dot = 0;
+	//float dot = (pixel.normal * Vec3(0, 0, 1));
+	//if (dot < 0)
+		//dot = 0;
 	
 	
-	return { 1 * dot, 0, 0, 1 };
+	//return { 0, dot, 0, 1 };
+	Vec3 toCam = Vec3(0, 0, 0) - pixel.worldPos;
+	Vec3 reflect = toCam.Reflect(pixel.normal);
+
+	return sampler2d.SampleCubeMap(cb.GetPlanes(), reflect.x, reflect.y, reflect.z);
 
 }
-
-class CubeMapVertex {
-public:
-	Vec4 position;
-	CubeMapVertex(const Vec4& p) : position(p) {}
-};
-
-class CubeMapPixel : public Renderer::PixelShaderInput {
-	
-public:
-	Vec4 position;
-	Vec4 texel;
-	CubeMapPixel() {}
-	CubeMapPixel(const Vec4& p, const Vec4& t) : position(p), texel(t) {}
-
-	Vec4& GetPos() override {
-		return position;
-	}
-
-};
-
-CubeMapPixel CubeMapVertexShader(CubeMapVertex& vertex) {
-	
-	Vec4 pos = projection * view * cubeScale * vertex.position;
-	return { pos, vertex.position };
-}
-Vec4 CubeMapPixelShader(CubeMapPixel& pixel, const Renderer::Sampler<CubeMapPixel>& sampler) {
-	return sampler.SampleCubeMap(posX, negX, posY, negY, posZ, negZ, pixel.texel.x, pixel.texel.y, pixel.texel.z);
-}
-
-int cubeMapIndices[] = {
-
-	0, 1, 2,
-	0, 2, 3,
-
-	1, 5, 6,
-	1, 6, 2,
-
-	3, 6, 7,
-	3, 2, 6,
-
-	4, 1, 0,
-	4, 5, 1,
-
-	0, 3, 7,
-	0, 7, 4,
-
-	4, 7, 6,
-	4, 6, 5
-
-};
-CubeMapVertex cubeMapVerts[] = { {Vec4(-.5, -.5, -.5, 1)}, {Vec4(.5, -.5, -.5, 1)}, {Vec4(.5, .5, -.5, 1)} , {Vec4(-.5, .5, -.5, 1)},
-							   {Vec4(-.5, -.5, .5, 1)}, {Vec4(.5, -.5, .5, 1)}, {Vec4(.5, .5, .5, 1)} , {Vec4(-.5, .5, .5, 1)} };
 
 int numBoxIndices = 0;
 int* boxIndices;
@@ -135,10 +88,7 @@ TestVertex* boxVerts;
 
 float r = 0.1;
 
-bool RenderLogic(Surface& backBuffer, Renderer& renderer, float deltaTime) {
-
-
-	
+bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	int numKeys;
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
@@ -178,11 +128,9 @@ bool RenderLogic(Surface& backBuffer, Renderer& renderer, float deltaTime) {
 	}
 
 	rotation = Mat4::GetRotation(0, r, 0);
-	
-	transformation = projection * view * translation * rotation * scale;
 
 	renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader, TestPixelShader);
-	renderer.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
+	cb.Render(renderer, view, projection);
 	
 
 	SDL_Event event = {};
@@ -217,7 +165,7 @@ void PostProcess(Surface& frontBuffer) {
 
 	//frontBuffer.GaussianBlur(10, 3, Surface::BLUR_BOTH);
 	//frontBuffer.Invert();
-	frontBuffer.Tint({1, 0, 0, 1}, 0.2);
+	//frontBuffer.SetContrast(0.3);
 
 }
 
@@ -263,25 +211,24 @@ int main(int argc, char* argv[]) {
 	//texture.GenerateMipMaps();
 	//texture.Tint({ 1, 0, 0, 1 }, 0.2);
 	
-	Window window("My Window", 100, 20, 750, 750, 0);
+	Window window("My Window", 20, 20, 1000, 1000, 0);
 
 	projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
 
 	StartDoubleBufferedInstance(window, RenderLogic, PostProcess, RF_BILINEAR | RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
 
-	//projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, 2160.0 / 3840, -2160.0 / 3840);
-	//Surface s("images/Features.jpg");
-	//Renderer r(s);
-	//r.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
+	
 
-	//s.SetContrast(1);
-	//s.Resize(1920, 1080, true);
-	//s.Rescale(0.1, 0.1);
-	//s.Invert();
-	//s.GaussianBlur(2, 1, Surface::BLUR_BOTH);
-	//s.SaveToFile("images/blur.bmp");
+	//Surface s(window.GetWidth(), window.GetHeight());
+	//Renderer r(s);
+	//r.SetFlags(RF_BACKFACE_CULL);
+	//r.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader, TestPixelShader);
+	//cb.Render(r, view, projection);
+	////r.DrawElementArray<CubeMapVertex, CubeMapPixel>(12, cubeMapIndices, cubeMapVerts, CubeMapVertexShader, CubeMapPixelShader);
+
 	//window.DrawSurface(s);
 	//window.BlockUntilQuit();
+
 
 	delete[] boxIndices;
 	delete[] boxVerts;

@@ -1,11 +1,21 @@
 #pragma once
+
 #include "Surface.h"
 #include "Vec2.h"
 #include "Vec3.h"
+#include "Vec4.h"
+#include "Mat4.h"
 #include <unordered_map>
 #include <thread>
 #include <vector>
-#include <SDL.h>
+
+#ifndef NEAR
+#define NEAR 1.0
+#endif
+
+#ifndef FAR
+#define FAR 100.0
+#endif
 
 #ifndef _DEBUG
 #define THREADS (std::thread::hardware_concurrency() - 2) / 2
@@ -24,9 +34,6 @@
 #define RF_BILINEAR 0b0000000000010000
 #define RF_MIPMAP 0b0000000000100000
 #define RF_TRILINEAR 0b0000000001000000
-
-#define VS_POINTER(F) Pixel(*F)(Vertex& v)
-#define PS_POINTER(F) Vec4(*F)(Pixel& sd, const Sampler<Pixel>& sampler)
 
 class Renderer
 {
@@ -64,7 +71,6 @@ private:
 
 	}
 
-
 public:
 
 	// any class that will be used as vertex data in this renderer
@@ -83,6 +89,34 @@ public:
 			GetPos().y /= GetPos().w;
 			GetPos().z /= GetPos().w;
 
+		}
+
+	};
+
+	class DepthBuffer {
+
+		friend class Renderer;
+
+	private:
+		float* pDepths;
+		int width;
+		int height;
+
+		inline void PutPixel(int x, int y, float depth) {
+			pDepths[width * y + x] = depth;
+		}
+
+	public:
+		DepthBuffer(int width, int height);
+		~DepthBuffer();
+
+		void Resize(int width, int height);
+		void SaveToFile(const std::string& filename) const;
+
+		void WhiteOut();
+
+		inline float GetPixel(int x, int y) const {
+			return pDepths[y * width + x];
 		}
 
 	};
@@ -119,7 +153,7 @@ public:
 		mutable bool newScanline = true;
 
 		Pixel GetInterpolatedPixel(int x, int y) const {
-			
+
 			// this function is needed if a pixels above is unknown (edges of the triangle)
 			// finds what the pixel at xCoord yCoord is using interpolation
 
@@ -138,11 +172,11 @@ public:
 
 			Pixel leftTravelerVertex = flatTop ? Lerp(*leftVertex, *bottomVertex, alphaDown) : Lerp(*topVertex, *leftVertex, alphaDown);
 			Vec2 leftTravelerScreen = flatTop ? (*leftScreen * (1 - alphaDown) + *bottomScreen * alphaDown) :
-				                                (*topScreen * (1 - alphaDown) + *leftScreen * alphaDown);
+				(*topScreen * (1 - alphaDown) + *leftScreen * alphaDown);
 
 			Pixel rightTravelerVertex = flatTop ? Lerp(*rightVertex, *bottomVertex, alphaDown) : Lerp(*topVertex, *rightVertex, alphaDown);
 			Vec2 rightTravelerScreen = flatTop ? (*rightScreen * (1 - alphaDown) + *bottomScreen * alphaDown) :
-				                                 (*topScreen * (1 - alphaDown) + *rightScreen * alphaDown);
+				(*topScreen * (1 - alphaDown) + *rightScreen * alphaDown);
 
 			// left and right values need to be exactly the same as in the rasterization
 			int pixelLeft = (int)ceil(leftTravelerScreen.x - 0.5);
@@ -156,7 +190,6 @@ public:
 			if (alphaAcross < 0)
 				alphaAcross = 0;
 
-			//Pixel acrossTraveler = leftTravelerVertex * (1 - alphaAcross) + rightTravelerVertex * alphaAcross;
 			Pixel acrossTraveler = Lerp(leftTravelerVertex, rightTravelerVertex, alphaAcross);
 
 			// flip perspective, the pixels this value was derived from have inverted perspectives
@@ -229,7 +262,7 @@ public:
 				topScreen = v2;
 
 			}
-	
+
 			aboveLookup.reserve(rightScreen->x - leftScreen->x + 1);
 		}
 
@@ -281,7 +314,7 @@ public:
 
 				// only consider the trilinear flag if mipmapping is also enabled
 				if (parentRenderer.flags & RF_TRILINEAR) {
-					
+
 					// get this and the next mip map
 					const Surface* mm1 = texture.GetMipMap((int)mipMapLod);
 					const Surface* mm2 = texture.GetMipMap((int)mipMapLod + 1);
@@ -302,8 +335,7 @@ public:
 
 		}
 
-		Vec4 SampleCubeMap(const Surface& posX, const Surface& negX, const Surface& posY, const Surface& negY, 
-						   const Surface& posZ, const Surface& negZ, float s, float t, float p) const {
+		Vec4 SampleCubeMap(const Surface* planes, float s, float t, float p) const {
 
 			// Cube map sampling equations from section 7.5, "Mathematics for 3D Game Programming and Computer Graphics", Lengyel
 
@@ -322,14 +354,14 @@ public:
 
 				if (s > 0) {
 					// positive x
-					surfaceToSample = &posX;
+					surfaceToSample = &planes[0];
 					finalS = 0.5 - p / (2 * s);
 					finalT = 0.5 - t / (2 * s);
 
 				}
 				else {
 					// negative x
-					surfaceToSample = &negX;
+					surfaceToSample = &planes[1];
 					finalS = 0.5 - p / (2 * s);
 					finalT = 0.5 + t / (2 * s);
 				}
@@ -339,13 +371,13 @@ public:
 
 				if (t > 0) {
 					// positive y
-					surfaceToSample = &posY;
+					surfaceToSample = &planes[2];
 					finalS = 0.5 + s / (2 * t);
 					finalT = 0.5 + p / (2 * t);
 				}
 				else {
 					// negative y
-					surfaceToSample = &negY;
+					surfaceToSample = &planes[3];
 					finalS = 0.5 - s / (2 * t);
 					finalT = 0.5 + p / (2 * t);
 				}
@@ -354,13 +386,13 @@ public:
 			else {
 				if (p > 0) {
 					// positive z
-					surfaceToSample = &posZ;
+					surfaceToSample = &planes[4];
 					finalS = 0.5 + s / (2 * p);
 					finalT = 0.5 - t / (2 * p);
 				}
 				else {
 					// negative z
-					surfaceToSample = &negZ;
+					surfaceToSample = &planes[5];
 					finalS = 0.5 + s / (2 * p);
 					finalT = 0.5 + t / (2 * p);
 				}
@@ -375,14 +407,14 @@ public:
 
 private:
 
-	Surface zBuffer;
+	// if a draw call is made where the 
+	// pixel and vertex shaders are member functions
+	// this will store the object that made the call
+	void* boundObject = nullptr;
 
 	Surface* pRenderTarget;
 
-	float near = 1;
-	float far = 100;
-
-	float* depthBuffer;
+	DepthBuffer depthBuffer;
 
 	short flags = 0;
 
@@ -391,8 +423,23 @@ private:
 	// they are good for cube maps
 	bool usingThreads = false;
 
+	template <class Vertex, class Pixel>
+	using VS_TYPE = Pixel(*)(Vertex& v);
+
 	template <class Pixel>
-	void ClipAndDrawTriangle(Pixel& p1, Pixel& p2, Pixel& p3, PS_POINTER(PixelShader), int iteration) {
+	using PS_TYPE = Vec4(*)(Pixel & sd, const Sampler<Pixel> & sampler);
+
+	template <class Vertex, class Pixel>
+	class NO_CLASS {
+
+	public:
+		virtual Pixel VertexShader(Vertex& v) = 0;
+		virtual Vec4 PixelShader(Pixel& p, const Sampler<Pixel>& sampler) = 0;
+
+	};
+
+	template <class Pixel, class Mesh, typename PSPtr>
+	void ClipAndDrawTriangle(Pixel& p1, Pixel& p2, Pixel& p3, PSPtr PixelShader, int iteration) {
 
 		int memberVariableOffset = 0;
 
@@ -439,7 +486,7 @@ private:
 			break;
 
 		default:
-			DrawTriangle<Pixel>(p1, p2, p3, PixelShader);
+			DrawTriangle<Pixel, Mesh, PSPtr>(p1, p2, p3, PixelShader);
 			return;
 		}
 
@@ -463,19 +510,19 @@ private:
 				else {
 
 					//p1 outside, p2 outside, p3 inside
-					Clip2Outside<Pixel>(p1, p2, p3, PixelShader, memberVariableOffset, signOfPlane, iteration + 1);
+					Clip2Outside<Pixel, Mesh, PSPtr>(p1, p2, p3, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 			}
 			else {
 				if (p3Outside) {
 
 					//p1 outside, p2 inside, p3 outside
-					Clip2Outside<Pixel>(p3, p1, p2, PixelShader, memberVariableOffset, signOfPlane, iteration + 1);
+					Clip2Outside<Pixel, Mesh, PSPtr>(p3, p1, p2, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 				else {
 		
 					//p1 outside, p2 inside, p3 inside
-					Clip1Outside<Pixel>(p1, p2, p3, PixelShader, memberVariableOffset, signOfPlane, iteration + 1);
+					Clip1Outside<Pixel, Mesh, PSPtr>(p1, p2, p3, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 			}
 		}
@@ -484,34 +531,32 @@ private:
 				if (p3Outside) {
 
 					//p1 inside, p2 outside, p3 outside
-					Clip2Outside<Pixel>(p2, p3, p1, PixelShader, memberVariableOffset, signOfPlane, iteration + 1);
+					Clip2Outside<Pixel, Mesh, PSPtr>(p2, p3, p1, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 				else {
 
 					//p1 inside, p2 outside, p3 inside
-					Clip1Outside<Pixel>(p2, p3, p1, PixelShader, memberVariableOffset, signOfPlane, iteration + 1);
+					Clip1Outside<Pixel, Mesh, PSPtr>(p2, p3, p1, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 			}
 			else {
 				if (p3Outside) {
 
 					//p1 inside, p2 inside, p3 outside
-					Clip1Outside<Pixel>(p3, p1, p2, PixelShader, memberVariableOffset, signOfPlane, iteration + 1);
+					Clip1Outside<Pixel, Mesh, PSPtr>(p3, p1, p2, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 				else {
 
 					// clip against next plane
-					ClipAndDrawTriangle<Pixel>(p1, p2, p3, PixelShader, iteration + 1);
+					ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(p1, p2, p3, PixelShader, iteration + 1);
 				}
 			}
 		}
 
-		
-
 	}
 
-	template <class Pixel>
-	void Clip1Outside(Pixel& outside, Pixel& inside1, Pixel& inside2, PS_POINTER(PixelShader), int memberVariableOffset, int signOfPlane, int nextIteration) {
+	template <class Pixel, class Mesh, typename PSPtr>
+	void Clip1Outside(Pixel& outside, Pixel& inside1, Pixel& inside2, int memberVariableOffset, int signOfPlane, int nextIteration, PSPtr PixelShader) {
 
 		// the triangle will be drawn with the order, outside, inside1, inside2
 
@@ -527,13 +572,13 @@ private:
 		Pixel n1 = Lerp(outside, inside1, alpha1);
 		Pixel n2 = Lerp(outside, inside2, alpha2);
 
-		ClipAndDrawTriangle<Pixel>(n1, inside1, inside2, PixelShader, nextIteration);
-		ClipAndDrawTriangle<Pixel>(n1, inside2, n2, PixelShader, nextIteration);
+		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, inside1, inside2, PixelShader, nextIteration);
+		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, inside2, n2, PixelShader, nextIteration);
 
 	}
 
-	template <class Pixel>
-	void Clip2Outside(Pixel& outside1, Pixel& outside2, Pixel& inside, PS_POINTER(PixelShader), int memberVariableOffset, int signOfPlane, int nextIteration) {
+	template <class Pixel, class Mesh, typename PSPtr>
+	void Clip2Outside(Pixel& outside1, Pixel& outside2, Pixel& inside, int memberVariableOffset, int signOfPlane, int nextIteration, PSPtr PixelShader) {
 
 		// the triangle will be drawn with the order outside1, outside2, inside
 
@@ -549,7 +594,7 @@ private:
 		Pixel n1 = Lerp(outside1, inside, alpha1);
 		Pixel n2 = Lerp(outside2, inside, alpha2);
 
-		ClipAndDrawTriangle<Pixel>(n1, n2, inside, PixelShader, nextIteration);
+		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, n2, inside, PixelShader, nextIteration);
 
 	}
 
@@ -572,8 +617,8 @@ private:
 
 	}
 
-	template <class Pixel>
-	void DrawTriangle(Pixel p1, Pixel p2, Pixel p3, PS_POINTER(PixelShader)) {
+	template <class Pixel, class Mesh, typename PSPtr>
+	void DrawTriangle(Pixel p1, Pixel p2, Pixel p3, PSPtr PixelShader) {
 		
 		// w divide
 		p1.WDivide();
@@ -595,14 +640,14 @@ private:
 		}
 
 		//calculate pixel coordinates
-		Vec2 v1Screen(((p1.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
-			((-p1.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
+		Vec2 v1Screen((int)((p1.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 0.1) / 2.0),
+			(int)((-p1.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2.0));
 
-		Vec2 v2Screen(((p2.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
-			((-p2.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
+		Vec2 v2Screen((int)((p2.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 0.1) / 2.0),
+			(int)((-p2.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2.0));
 
-		Vec2 v3Screen(((p3.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 1) / 2),
-			((-p3.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2));
+		Vec2 v3Screen((int)((p3.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 0.1) / 2.0),
+			(int)((-p3.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2.0));
 
 		// if wireframe mode is enabled
 		if (flags & RF_WIREFRAME) {
@@ -662,18 +707,18 @@ private:
 #ifndef _DEBUG
 			if (usingThreads) {
 
-				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
-				DrawFlatTop(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel, Mesh, PSPtr>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
+				DrawFlatTop<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
 				flatBottom.join();
 			}
 			else {
 
-				DrawFlatBottom(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
-				DrawFlatTop(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+				DrawFlatBottom<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
+				DrawFlatTop<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
 			}
 #else
-			DrawFlatBottom(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
-			DrawFlatTop(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+			DrawFlatBottom<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
+			DrawFlatTop<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
 #endif
 	
 		}
@@ -683,17 +728,17 @@ private:
 #ifndef _DEBUG
 			if (usingThreads) {
 
-				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
-				DrawFlatTop(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel, Mesh, PSPtr>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
+				DrawFlatTop<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
 				flatBottom.join();
 			}
 			else {
-				DrawFlatBottom(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
-				DrawFlatTop(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+				DrawFlatBottom<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
+				DrawFlatTop<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
 			}
 #else
-			DrawFlatBottom(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
-			DrawFlatTop(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+			DrawFlatBottom<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
+			DrawFlatTop<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
 #endif
 
 		}
@@ -708,8 +753,25 @@ private:
 		}
 	}
 
-	template <class Pixel>
-	void DrawFlatBottom(Pixel& leftPixel, Vec2& leftScreen, Pixel& topPixel, Vec2& topScreen, Pixel& rightPixel, Vec2& rightScreen, PS_POINTER(PixelShader)) {
+	template <class Pixel, class Mesh, typename PSPtr>
+	Vec4 RunPixelShader(PSPtr PixelShader, Pixel& args, const Sampler<Pixel>& sampler) {
+
+		if (boundObject == nullptr) {
+
+			return PixelShader(args, sampler);
+
+		}
+		else {
+
+			Mesh* mesh = (Mesh*)boundObject;
+			return mesh->PixelShader(args, sampler);
+
+		}
+
+	}
+
+	template <class Pixel, class Mesh, typename PSPtr>
+	void DrawFlatBottom(Pixel& leftPixel, Vec2& leftScreen, Pixel& topPixel, Vec2& topScreen, Pixel& rightPixel, Vec2& rightScreen, PSPtr PixelShader) {
 
 		// absolute highest and lowest pixels of the triangle
 		int pixelTop = (int)ceil(topScreen.y - 0.5);
@@ -765,17 +827,15 @@ private:
 
 				// get the depth and normalize from 0 to 1, use w for depth
 				float normalizedDepth = flags & RF_LINEAR_ZBUF ?
-					(acrossTravelerPixel.GetPos().w - near) / (far - near)
+					(acrossTravelerPixel.GetPos().w - NEAR) / (FAR - NEAR)
 					: 
-					(1 / acrossTravelerPixel.GetPos().w - 1 / near) / (1 / far - 1 / near);
+					(1 / acrossTravelerPixel.GetPos().w - 1 / NEAR) / (1 / FAR - 1 / NEAR);
 
-				// test the pixel agains the z buffer
+				// test the pixel against the z buffer
 				if (TestAndSetPixel(x, y, normalizedDepth)) {
-
+					
 					// run the pixel shader
-					Vec4 pixelColor = PixelShader(acrossTravelerPixel, sampler2d);
-
-					// set the pixel on the render target
+					Vec4 pixelColor = RunPixelShader<Pixel, Mesh, PSPtr>(PixelShader, acrossTravelerPixel, sampler2d);
 					pRenderTarget->PutPixel(x, y, pixelColor);
 
 				}
@@ -796,8 +856,8 @@ private:
 
 	}
 
-	template <class Pixel>
-	void DrawFlatTop(Pixel& leftPixel, Vec2& leftScreen, Pixel& bottomPixel, Vec2& bottomScreen, Pixel& rightPixel, Vec2& rightScreen, PS_POINTER(PixelShader)) {
+	template <class Pixel, class Mesh, typename PSPtr>
+	void DrawFlatTop(Pixel& leftPixel, Vec2& leftScreen, Pixel& bottomPixel, Vec2& bottomScreen, Pixel& rightPixel, Vec2& rightScreen, PSPtr PixelShader) {
 		
 		// absolute highest and lowest pixels of the triangle
 		int pixelTop = (int)ceil(leftScreen.y - 0.5);
@@ -844,7 +904,7 @@ private:
 				
 				// % of the way across the scanline we are
 				float howFarAcross = (float)(x - pixelLeft) / (pixelRight - pixelLeft);
-
+				
 				// interpolate the traveler across the scanline
 				acrossTravelerPixel = Lerp(leftTravelerPixel, rightTravelerPixel, howFarAcross);
 
@@ -853,17 +913,15 @@ private:
 
 				// get the depth and normalize from 0 to 1, use w for depth
 				float normalizedDepth = flags & RF_LINEAR_ZBUF ?
-					(acrossTravelerPixel.GetPos().w - near) / (far - near)
+					(acrossTravelerPixel.GetPos().w - NEAR) / (FAR - NEAR)
 					:
-					(1 / acrossTravelerPixel.GetPos().w - 1 / near) / (1 / far - 1 / near);
+					(1 / acrossTravelerPixel.GetPos().w - 1 / NEAR) / (1 / FAR - 1 / NEAR);
 
 				// test the pixel agains the z buffer
 				if (TestAndSetPixel(x, y, normalizedDepth)) {
 
 					// run the pixel shader
-					Vec4 pixelColor = PixelShader(acrossTravelerPixel, sampler2d);
-
-					// set the pixel on the render target
+					Vec4 pixelColor = RunPixelShader<Pixel, Mesh, PSPtr>(PixelShader, acrossTravelerPixel, sampler2d);
 					pRenderTarget->PutPixel(x, y, pixelColor);
 
 				}
@@ -886,15 +944,25 @@ private:
 
 	bool TestAndSetPixel(int x, int y, float normalizedDepth);
 
-public:
+	template <class Vertex, class Pixel, class Mesh, typename VSPtr>
+	Pixel RunVertexShader(VSPtr VertexShader, Vertex& args) {
 
-	Renderer(Surface& renderTarget);
-	~Renderer();
+		if (boundObject == nullptr) {
 
-	void SetRenderTarget(Surface& renderTarget);
+			return VertexShader(args);
 
-	template <class Vertex, class Pixel>
-	void DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VS_POINTER(VertexShader), PS_POINTER(PixelShader)) {
+		}
+		else {
+
+			Mesh* mesh = (Mesh*)boundObject;
+			return mesh->VertexShader(args);
+
+		}
+
+	}
+
+	template <class Vertex, class Pixel, class Mesh, typename VSPtr, typename PSPtr>
+	void _DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VSPtr VertexShader, PSPtr PixelShader) {
 
 		if (pRenderTarget == nullptr)
 			return;
@@ -902,6 +970,8 @@ public:
 		std::vector<std::thread> threads;
 		std::unordered_map<int, Pixel> processedVertices;
 
+		// creating many many threads seems to cause major lag
+		// so only use threads for models with a few large triangles
 		if (numIndexGroups < 20)
 			usingThreads = true;
 
@@ -913,13 +983,13 @@ public:
 
 			// run the vertex shaders or look up the vertex if it has already been run
 			if (!processedVertices.count(i1)) {
-				processedVertices.emplace(i1, VertexShader(vertices[i1]));
+				processedVertices.emplace(i1, RunVertexShader<Vertex, Pixel, Mesh, VSPtr>(VertexShader, vertices[i1]));
 			}
 			if (!processedVertices.count(i2)) {
-				processedVertices.emplace(i2, VertexShader(vertices[i2]));
+				processedVertices.emplace(i2, RunVertexShader<Vertex, Pixel, Mesh, VSPtr>(VertexShader, vertices[i2]));
 			}
 			if (!processedVertices.count(i3)) {
-				processedVertices.emplace(i3, VertexShader(vertices[i3]));
+				processedVertices.emplace(i3, RunVertexShader<Vertex, Pixel, Mesh, VSPtr>(VertexShader, vertices[i3]));
 			}
 
 			// clear out any threads that have already finished
@@ -935,33 +1005,62 @@ public:
 				}
 
 			}
-			
+
 			// if we have enough resources to draw this triangle in a new thread, do so
 			if (threads.size() < THREADS && usingThreads) {
 
-				//threads.emplace_back(&Renderer::DrawTriangle<Pixel>, this, processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader);
-				threads.emplace_back(&Renderer::ClipAndDrawTriangle<Pixel>, this, std::ref(processedVertices[i1]), std::ref(processedVertices[i2]), std::ref(processedVertices[i3]), PixelShader, 0);
-				
+				threads.emplace_back(&Renderer::ClipAndDrawTriangle<Pixel, Mesh, PSPtr>, this, std::ref(processedVertices[i1]), std::ref(processedVertices[i2]), std::ref(processedVertices[i3]), PixelShader, 0);
+
 			}
 			else {
-				//DrawTriangle<Pixel>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader);
-				ClipAndDrawTriangle<Pixel>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
+				ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
 			}
-			
+
 
 		}
 
 		// wait for all threads to finish before returning
 		for (int i = 0; i < threads.size(); i++)
 			threads[i].join();
-		
+
 		usingThreads = false;
 	}
 
-	void ClearZBuffer();
+public:
+
+	Renderer(Surface& renderTarget);
+	~Renderer();
+
+	void SetRenderTarget(Surface& renderTarget);
+
+	template <class Vertex, class Pixel>
+	void DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VS_TYPE<Vertex, Pixel> VertexShader, PS_TYPE<Pixel> PixelShader) {
+
+		// used when vertex and pixel shader are not member functions
+
+		boundObject = nullptr;
+
+		_DrawElementArray<Vertex, Pixel, NO_CLASS<Vertex, Pixel>, VS_TYPE<Vertex, Pixel>, PS_TYPE<Pixel>>(numIndexGroups, indices, vertices, VertexShader, PixelShader);
+
+	}
+
+	template <class Vertex, class Pixel, class Mesh>
+	void DrawElementArray(Mesh* mesh, int numIndexGroups, int* indices, Vertex* vertices) {
+
+		// used when vertex and pixel shader are member functions
+
+		boundObject = (void*)mesh;
+
+		_DrawElementArray<Vertex, Pixel, Mesh, VS_TYPE<Vertex, Pixel>, PS_TYPE<Pixel>>(numIndexGroups, indices, vertices, nullptr, nullptr);
+
+		boundObject = nullptr;
+	}
+
+	const DepthBuffer& GetDepthBuffer() const;
+	void ClearDepthBuffer();
 
 	void SetFlags(short flags);
 	void ClearFlags(short flags);
+	bool TestFlags(short flags) const;
 
 };
-

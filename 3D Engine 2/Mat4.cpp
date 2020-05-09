@@ -60,7 +60,7 @@ Vec4 Mat4::operator[](int c) const {
 
 }
 
-Mat4 Mat4::operator*(const Mat4& m) {
+Mat4 Mat4::operator*(const Mat4& m) const {
 
 	union vec { __m128 sse; float arr[4]; };
 
@@ -95,7 +95,7 @@ Mat4 Mat4::operator*(const Mat4& m) {
 
 }
 
-Vec4 Mat4::operator*(const Vec4& v) {
+Vec4 Mat4::operator*(const Vec4& v) const {
 
 	Vec4 thisRow1(data[0], data[4], data[8], data[12]);
 	Vec4 thisRow2(data[1], data[5], data[9], data[13]);
@@ -106,7 +106,7 @@ Vec4 Mat4::operator*(const Vec4& v) {
 
 }
 
-Mat4 Mat4::operator*(float c) {
+Mat4 Mat4::operator*(float c) const {
 
 	return { cols[0] * c, cols[1] * c, cols[2] * c, cols[3] * c };
 

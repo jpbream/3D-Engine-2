@@ -1,15 +1,15 @@
 #include "Renderer.h"
 #include "Vec2.h"
+#include <SDL.h>
 
-Renderer::Renderer(Surface& renderTarget) : pRenderTarget(&renderTarget), zBuffer(renderTarget.GetWidth(), renderTarget.GetHeight()) {
+Renderer::Renderer(Surface& renderTarget) : pRenderTarget(&renderTarget), depthBuffer(renderTarget.GetWidth(), renderTarget.GetHeight()) {
 
-	depthBuffer = new float[renderTarget.GetWidth() * renderTarget.GetHeight()];
-	ClearZBuffer();
+	ClearDepthBuffer();
 
 }
 
 Renderer::~Renderer() {
-	delete[] depthBuffer;
+	
 }
 
 void Renderer::SetRenderTarget(Surface& renderTarget) {
@@ -22,17 +22,21 @@ void Renderer::SetRenderTarget(Surface& renderTarget) {
 
 bool Renderer::TestAndSetPixel(int x, int y, float normalizedDepth) {
 
-	if (normalizedDepth < depthBuffer[y * pRenderTarget->GetWidth() + x]) {
-		depthBuffer[y * pRenderTarget->GetWidth() + x] = normalizedDepth;
+	if (normalizedDepth < depthBuffer.GetPixel(x, y)) {
+		depthBuffer.PutPixel(x, y, normalizedDepth);
 		return true;
 	}
 	return false;
 }
 
-void Renderer::ClearZBuffer() {
+const Renderer::DepthBuffer& Renderer::GetDepthBuffer() const {
 
-	// random float I found that is a super big number 0x7a7a7a7a
-	memset(depthBuffer, 0x7a, pRenderTarget->GetWidth() * pRenderTarget->GetHeight() * sizeof(float));
+	return depthBuffer;
+}
+
+void Renderer::ClearDepthBuffer() {
+
+	depthBuffer.WhiteOut();
 
 }
 
@@ -45,5 +49,63 @@ void Renderer::SetFlags(short flags) {
 void Renderer::ClearFlags(short flags) {
 
 	this->flags &= ~flags;
+
+}
+
+bool Renderer::TestFlags(short flags) const {
+
+	return this->flags & flags;
+
+}
+
+Renderer::DepthBuffer::DepthBuffer(int width, int height) : width(width), height(height) {
+
+	pDepths = new float[width * height];
+
+}
+
+Renderer::DepthBuffer::~DepthBuffer() {
+	delete[] pDepths;
+}
+
+void Renderer::DepthBuffer::Resize(int width, int height) {
+
+	if (width * height > this->width* this->height) {
+
+		delete[] pDepths;
+		pDepths = new float[width * height];
+
+	}
+
+	this->width = width;
+	this->height = height;
+
+}
+
+void Renderer::DepthBuffer::SaveToFile(const std::string& filename) const {
+
+	unsigned int* normalized = new unsigned int[width * height];
+
+	unsigned int aMask = 0xff000000;
+
+	for (int i = 0; i < width * height; ++i) {
+		normalized[i] = (unsigned int)std::fminf(255.0f, pDepths[i] * 255);
+
+		normalized[i] |= (normalized[i] << 16) | (normalized[i] << 8) | aMask;
+	}
+
+	SDL_Surface* surface = SDL_CreateRGBSurfaceFrom((void*)normalized, width, height, 32, width * 4, 0x000000ff, 0x0000ff00, 0x00ff0000, aMask);
+	SDL_SaveBMP(surface, filename.c_str());
+	SDL_FreeSurface(surface);
+
+	delete[] normalized;
+
+
+}
+
+void Renderer::DepthBuffer::WhiteOut() {
+
+	// random float I found that is a super big number 0x7a7a7a7a
+	memset(pDepths, 0x7a, width * height * sizeof(float));
 
 }

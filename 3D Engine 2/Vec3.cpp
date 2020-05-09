@@ -102,6 +102,32 @@ Vec3 Vec3::Normalized() const {
 	return *this * (1 / Length());
 }
 
+Vec3 Vec3::Reflect(const Vec3& normal) const {
+
+	// Equations from "Mathematics for 3D Game Programming and Computer Graphics" by Eric Lengyel
+
+	Vec3 thisNormal = Normalized();
+	Vec3 normNormal = normal.Normalized();
+
+	return normNormal * (normNormal * thisNormal * 2) - thisNormal;
+
+}
+
+Vec3 Vec3::Refract(const Vec3& normal, float n1, float n2) const {
+
+	// Equations from "Mathematics for 3D Game Programming and Computer Graphics" by Eric Lengyel
+
+	Vec3 thisNormal = Normalized();
+	Vec3 normNormal = normal.Normalized();
+
+	float nRatio = n1 / n2;
+
+	float coefficient = ((normNormal * nRatio) * thisNormal) - (sqrt(1 - (nRatio * nRatio) * (1 - pow(normNormal * thisNormal, 2))));
+
+	return normNormal * coefficient - thisNormal * nRatio;
+
+}
+
 std::ostream& operator<<(std::ostream& os, const Vec3& v) {
 
 	os << "[ " << v.x << " " << v.y << " " << v.z << " ]";

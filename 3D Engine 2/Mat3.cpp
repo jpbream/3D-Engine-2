@@ -55,7 +55,7 @@ Vec3 Mat3::operator[](int c) const {
 
 }
 
-Mat3 Mat3::operator*(const Mat3& m) {
+Mat3 Mat3::operator*(const Mat3& m) const {
 
 	Vec3 thisRow1(data[0], data[3], data[6]);
 	Vec3 thisRow2(data[1], data[4], data[7]);
@@ -69,7 +69,7 @@ Mat3 Mat3::operator*(const Mat3& m) {
 
 }
 
-Vec3 Mat3::operator*(const Vec3& v) {
+Vec3 Mat3::operator*(const Vec3& v) const {
 
 	Vec3 thisRow1(data[0], data[3], data[6]);
 	Vec3 thisRow2(data[1], data[4], data[7]);
@@ -79,7 +79,7 @@ Vec3 Mat3::operator*(const Vec3& v) {
 
 }
 
-Mat3 Mat3::operator*(float c) {
+Mat3 Mat3::operator*(float c) const {
 	
 	return {cols[0] * c, cols[1] * c, cols[2] * c};
 

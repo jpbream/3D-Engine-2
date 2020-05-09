@@ -34,9 +34,9 @@ public:
 	Vec4& operator[](int c);
 	Vec4 operator[](int c) const;
 
-	Mat4 operator*(const Mat4& m);
-	Vec4 operator*(const Vec4& v);
-	Mat4 operator*(float c);
+	Mat4 operator*(const Mat4& m) const;
+	Vec4 operator*(const Vec4& v) const;
+	Mat4 operator*(float c) const;
 
 	float GetDeterminant() const;
 	Mat4 GetInverse() const;

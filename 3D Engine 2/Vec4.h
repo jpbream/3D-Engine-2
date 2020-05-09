@@ -55,6 +55,9 @@ public:
 	float Length() const;
 	Vec4 Normalized() const;
 
+	Vec4 Reflect(const Vec4& normal) const;
+	Vec4 Refract(const Vec4& normal, float n1, float n2) const;
+
 };
 
 std::ostream& operator<<(std::ostream& os, const Vec4& v);

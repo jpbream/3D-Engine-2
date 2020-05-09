@@ -29,9 +29,9 @@ public:
 	Vec2& operator[](int c);
 	Vec2 operator[](int c) const;
 
-	Mat2 operator*(const Mat2& m);
-	Vec2 operator*(const Vec2& v);
-	Mat2 operator*(float c);
+	Mat2 operator*(const Mat2& m) const;
+	Vec2 operator*(const Vec2& v) const;
+	Mat2 operator*(float c) const;
 
 	float GetDeterminant() const;
 	Mat2 GetInverse() const;

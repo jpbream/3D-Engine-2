@@ -52,7 +52,7 @@ Vec2 Mat2::operator[](int c) const {
 
 }
 
-Mat2 Mat2::operator*(const Mat2& m) {
+Mat2 Mat2::operator*(const Mat2& m) const {
 
 	Vec2 thisRow1(data[0], data[2]);
 	Vec2 thisRow2(data[1], data[3]);
@@ -64,7 +64,7 @@ Mat2 Mat2::operator*(const Mat2& m) {
 
 }
 
-Vec2 Mat2::operator*(const Vec2& v) {
+Vec2 Mat2::operator*(const Vec2& v) const {
 
 	Vec2 thisRow1(data[0], data[2]);
 	Vec2 thisRow2(data[1], data[3]);
@@ -73,7 +73,7 @@ Vec2 Mat2::operator*(const Vec2& v) {
 
 }
 
-Mat2 Mat2::operator*(float c) {
+Mat2 Mat2::operator*(float c) const {
 
 	return { cols[0] * c, cols[1] * c };
 

@@ -35,9 +35,9 @@ public:
 	Vec3& operator[](int c);
 	Vec3 operator[](int c) const;
 
-	Mat3 operator*(const Mat3& m);
-	Vec3 operator*(const Vec3& v);
-	Mat3 operator*(float c);
+	Mat3 operator*(const Mat3& m) const;
+	Vec3 operator*(const Vec3& v) const;
+	Mat3 operator*(float c) const;
 
 	float GetDeterminant() const;
 	Mat3 GetInverse() const;

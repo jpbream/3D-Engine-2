@@ -34,7 +34,7 @@ static void DrawLoop() {
 	}
 }
 
-void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& backBuffer, Renderer& renderer, float deltaTime), void (*PostProcessing)(Surface& frontBuffer), short renderFlags)
+void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Renderer& renderer, float deltaTime), void (*PostProcessing)(Surface& frontBuffer), short renderFlags)
 {
 	pWindow = &window;
 
@@ -69,9 +69,9 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Surface& ba
 		pBackBuffer->BlackOut();
 
 		// call the program and render logic
-		shouldQuit = ProgramLogic(*pBackBuffer, renderer, deltaTime);
+		shouldQuit = ProgramLogic(renderer, deltaTime);
 
-		renderer.ClearZBuffer();
+		renderer.ClearDepthBuffer();
 
 #ifdef DIAGNOSTICS
 		Uint64 renderEnd = SDL_GetPerformanceCounter();
@@ -138,7 +138,7 @@ void StartSingleBufferedInstance(Window& window, bool (*ProgramLogic)(Surface& b
 		// call the program and render logic
 		shouldQuit = ProgramLogic(screenBuffer, renderer, deltaTime);
 
-		renderer.ClearZBuffer();
+		renderer.ClearDepthBuffer();
 
 		// draw the frame buffer to the window
 		window.DrawSurface(screenBuffer);
