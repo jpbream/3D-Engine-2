@@ -21,7 +21,7 @@ public:
 	union {
 		float z;
 		float b;
-		float r;
+		float p;
 	};
 
 	Vec3();

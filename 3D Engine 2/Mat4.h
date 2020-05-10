@@ -48,6 +48,7 @@ public:
 	static Mat4 GetRotation(float rx, float ry, float rz);
 	static Mat4 GetScale(float sx, float sy, float sz);
 	static Mat4 GetPerspectiveProjection(float n, float f, float l, float r, float t, float b);
+	static Mat4 GetOrthographicProjection(float n, float f, float l, float r, float t, float b);
 
 };
 

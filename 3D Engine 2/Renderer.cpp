@@ -64,6 +64,30 @@ Renderer::DepthBuffer::DepthBuffer(int width, int height) : width(width), height
 
 }
 
+Renderer::DepthBuffer::DepthBuffer() : width(0), height(0), pDepths(nullptr) {}
+
+Renderer::DepthBuffer::DepthBuffer(const DepthBuffer& db) : width(db.width), height(db.height) {
+
+	pDepths = new float[width * height];
+	memcpy(pDepths, db.pDepths, width * height * sizeof(float));
+
+}
+
+Renderer::DepthBuffer& Renderer::DepthBuffer::operator=(const DepthBuffer& db) {
+
+	width = db.width;
+	height = db.height;
+
+	if (pDepths != nullptr)
+		delete[] pDepths;
+
+	pDepths = new float[width * height];
+	memcpy(pDepths, db.pDepths, width * height * sizeof(float));
+
+	return *this;
+
+}
+
 Renderer::DepthBuffer::~DepthBuffer() {
 	delete[] pDepths;
 }
@@ -101,6 +125,14 @@ void Renderer::DepthBuffer::SaveToFile(const std::string& filename) const {
 	delete[] normalized;
 
 
+}
+
+int Renderer::DepthBuffer::GetWidth() const {
+	return width;
+}
+
+int Renderer::DepthBuffer::GetHeight() const {
+	return height;
 }
 
 void Renderer::DepthBuffer::WhiteOut() {

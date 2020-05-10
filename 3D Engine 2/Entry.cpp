@@ -9,15 +9,27 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-Mat4 rotation = Mat4::GetRotation(0, 0, .000001);
+Mat4 rotation = Mat4::GetRotation(0, 0, 0);
+Mat4 rotation2 = Mat4::GetRotation(0.2, 0, 0);
 Mat4 translation = Mat4::Get3DTranslation(0, 0, -10);
+Mat4 translation2 = Mat4::Get3DTranslation(0, -5, 0);
 Mat4 scale = Mat4::GetScale(1, 1, 1);
+Mat4 scale2 = Mat4::GetScale(100, 1, 100);
 Mat4 projection;
 Mat4 view;
-float camXRot = 0;
-float camYRot = 0;
 
-Surface texture("texture.png");
+Vec3 cameraRot(0, 0, 0);
+Vec3 cameraPos(0, 0, 0);
+
+Mat4 mViewport = { {.5, 0, 0, 0}, {0, .5, 0, 0}, {0, 0, .5, 0}, {.5, .5, .5, 1} };
+
+Mat4 orthographic = Mat4::GetOrthographicProjection(0, 15, -7, 7, 7, -7);
+Renderer::DepthBuffer shadowMap;
+
+Vec3 lightPos(0, 0, 1);
+Vec3 lightRot(0, 0, 0);
+
+Surface texture("images/grass.jpg");
 
 Cubemap cb("cube/posx.jpg", 
 	"cube/negx.jpg", 
@@ -36,9 +48,10 @@ class TestVertex {
 public:
 	Vec4 position;
 	Vec3 normal;
+	Vec2 texel;
 
 	TestVertex() {}
-	TestVertex(const Vec4& position, const Vec3& normal) : position(position), normal(normal) {}
+	TestVertex(const Vec4& position, const Vec3& normal, const Vec2& texel) : position(position), normal(normal), texel(texel) {}
 
 };
 
@@ -48,6 +61,8 @@ public:
 	Vec4 position;
 	Vec3 normal;
 	Vec3 worldPos;
+	Vec2 texel;
+	Vec3 shadow;
 
 	TestPixel() {}
 	TestPixel(const Vec4& v, const Vec3& normal) : position(v), normal(normal) {}
@@ -59,12 +74,19 @@ public:
 };
 TestPixel TestVertexShader(TestVertex& vertex) {
 
-	Vec4 worldPos = view * translation * rotation * scale * vertex.position;
-	Vec4 thing = projection * worldPos;
-	Vec3 norm = rotation.Truncate() * vertex.normal;
+	Vec4 worldPos = translation2 * rotation2 * scale2 * vertex.position;
+	Vec4 thing = projection * view * worldPos;
+	Vec3 norm = rotation2.Truncate() * vertex.normal;
 
 	TestPixel tp(thing, norm);
 	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
+	tp.texel = vertex.texel * 25;
+
+	Mat4 mObject = translation2 * rotation2 * scale2;
+	Mat4 mLight = Mat4::Get3DTranslation(lightPos.x, lightPos.y, lightPos.z) * Mat4::GetRotation(lightRot.x, lightRot.y, lightRot.z);
+	Vec4 s = mViewport * orthographic * mLight.GetInverse() * mObject * vertex.position;
+
+	tp.shadow = { s.s, s.t, s.p };
 
 	return tp;
 
@@ -72,19 +94,33 @@ TestPixel TestVertexShader(TestVertex& vertex) {
 
 Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampler2d) {
 
-	//return texture.GetPixel(pixel.texel.x * (texture.GetWidth() - 1), pixel.texel.y * (texture.GetHeight() - 1));
-	//return sampler2d.SampleTex2D(texture, 5);
-
-	//float dot = (pixel.normal * Vec3(0, 0, 1));
-	//if (dot < 0)
-		//dot = 0;
+	Vec3 toCam = lightPos - pixel.worldPos;
+	float dot = (pixel.normal.Normalized() * toCam.Normalized());
+	if (dot < 0)
+		dot = 0;
 	
-	
-	//return { 0, dot, 0, 1 };
-	Vec3 toCam = Vec3(0, 0, 0) - pixel.worldPos;
-	Vec3 reflect = toCam.Reflect(pixel.normal);
+	float compDepth = 1e99;
+	if (pixel.shadow.s >= 0 && pixel.shadow.s <= 1 && pixel.shadow.t >= 0 && pixel.shadow.t <= 1)
+		compDepth = shadowMap.GetPixel(pixel.shadow.s * (shadowMap.GetWidth() - 1), (pixel.shadow.t * shadowMap.GetHeight() - 1));
 
-	return sampler2d.SampleCubeMap(cb.GetPlanes(), reflect.x, reflect.y, reflect.z);
+	Vec4 col = { dot, dot, dot, 1 };
+
+	if (pixel.shadow.p > compDepth)
+		col = { dot - .1f, dot - .1f, dot - .1f, 1 };
+
+	if (col.r < 0)
+		col.r = 0;
+	if (col.g < 0)
+		col.g = 0;
+	if (col.b < 0)
+		col.b = 0;
+
+	return col;
+	
+	//Vec3 reflect = toCam.Reflect(pixel.normal);
+
+	//Vec4 col = sampler2d.SampleTex2D(texture, 11);
+	//return { col.r * dot, col.g * dot, col.b * dot, 1 };
 
 }
 
@@ -102,6 +138,7 @@ public:
 	Vec4 position;
 	Vec3 normal;
 	Vec3 worldPos;
+	Vec3 shadow;
 	SpherePixel() {}
 	SpherePixel(const Vec4& v, const Vec3& normal) : position(v), normal(normal) {}
 
@@ -111,25 +148,67 @@ SphereVertex* sv;
 
 SpherePixel SphereVertexShader(SphereVertex& v) {
 
-	Vec4 worldPos = view * translation * rotation * scale * v.position;
-	Vec4 thing = projection * worldPos;
+	Vec4 worldPos = translation * rotation * scale * v.position;
+	Vec4 thing = projection * view * worldPos;
 	Vec3 norm =  rotation.Truncate() * Vec3(v.position.x, v.position.y, v.position.z);
 
 	SpherePixel tp(thing, norm);
 	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
+
+	Mat4 mObject = translation * rotation * scale;
+	Mat4 mLight = Mat4::Get3DTranslation(lightPos.x, lightPos.y, lightPos.z) * Mat4::GetRotation(lightRot.x, lightRot.y, lightRot.z);
+	Vec4 s = mViewport * orthographic * mLight.GetInverse() * mObject * v.position;
+
+	tp.shadow = { s.s, s.t, s.p };
 
 	return tp;
 }
 
 Vec4 SpherePixelShader(SpherePixel& sp, const Renderer::Sampler<SpherePixel>& samp) {
 
-	Vec3 toCam = view.Truncate().GetInverse() * (Vec3(0, 0, 0) - sp.worldPos);
+	Vec3 toCam = (lightPos - sp.worldPos);
+
+	float dot = toCam.Normalized() * sp.normal.Normalized();
+	if (dot < 0)
+		dot = 0;
+
+	float compDepth = shadowMap.GetPixel(sp.shadow.s * (shadowMap.GetWidth() - 1), (sp.shadow.t * shadowMap.GetHeight() - 1));
+	
+	Vec4 col = { dot, dot, dot, 1 };
+
+	if (sp.shadow.p > compDepth + 0.01)
+		col = { dot - .1f, dot - .1f, dot - .1f, 1 };
+
+	if (col.r < 0)
+		col.r = 0;
+	if (col.g < 0)
+		col.g = 0;
+	if (col.b < 0)
+		col.b = 0;
+
+	return col;
+
 	//Vec3 reflect = toCam.Reflect(sp.normal);
-	Vec3 reflect = toCam.Refract(sp.normal, 1, 1.33);
+	//Vec3 reflect = toCam.Refract(sp.normal, 1, 1.33);
 
-	Vec4 col = samp.SampleCubeMap(cb.GetPlanes(), reflect.x, reflect.y, reflect.z);
+	//Vec4 col = samp.SampleCubeMap(cb.GetPlanes(), reflect.x, reflect.y, reflect.z);
 
-	return { col.r, col.g * 0.5f, col.b * 0.5f, 1 };
+	//return { col.r, col.g * 0.5f, col.b * 0.5f, 1 };
+}
+
+SpherePixel ShadowVertexShader(SphereVertex& v) {
+
+	Mat4 mObject = translation * rotation * scale;
+	Mat4 mLight = Mat4::Get3DTranslation(lightPos.x, lightPos.y, lightPos.z) * Mat4::GetRotation(lightRot.x, lightRot.y, lightRot.z);
+	
+	return { orthographic * mLight.GetInverse() * mObject * v.position, {0, 0, 0} };
+
+}
+
+Vec4 ShadowPixelShader(SpherePixel& sp, const Renderer::Sampler<SpherePixel>& samp) {
+
+	return { 0, 0, 0, 0 };
+
 }
 
 int numBoxIndices = 0;
@@ -138,29 +217,58 @@ TestVertex* boxVerts;
 
 float r = 0.1;
 
+TestVertex terrainVerts[4] = { 
+	{{-1, 0, -1, 1}, {0, 1, 0}, {0, 0}},
+{{1, 0, -1, 1}, {0, 1, 0}, {1, 0}},
+{{1, 0, 1, 1}, {0, 1, 0}, {1, 1}},
+{{-1, 0, 1, 1}, {0, 1, 0}, {0, 1}}
+};
+int terrainIndices[6] = {3, 2, 1, 3, 1, 0};
+
 bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	int numKeys;
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
 
 	if (keyboard[SDL_SCANCODE_Q]) {
-		r -= .8f * deltaTime;
+		rotation2 = rotation2 * Mat4::GetRotation(0.01, 0, 0);
 	}
 	if (keyboard[SDL_SCANCODE_E]) {
-		r += .8f * deltaTime;
+		rotation2 = rotation2 * Mat4::GetRotation(-0.01, 0, 0);
 	}
 	if (keyboard[SDL_SCANCODE_W]) {
-		translation(2, 3) -= deltaTime;
+		
+		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
+		cameraDir.y = 0;
+		cameraPos += cameraDir * deltaTime * 2;
+
 	}
 	if (keyboard[SDL_SCANCODE_S]) {
-		translation(2, 3) += deltaTime;
+		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
+		cameraDir.y = 0;
+		cameraPos -= cameraDir * deltaTime * 2;
 	}
 
 	if (keyboard[SDL_SCANCODE_A]) {
-		translation(0, 3) -= deltaTime;
+		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
+		cameraDir.y = 0;
+		cameraDir = Mat3::GetRotation(0, PI / 2, 0) * cameraDir;
+		cameraPos += cameraDir * deltaTime * 2;
 	}
 	if (keyboard[SDL_SCANCODE_D]) {
-		translation(0, 3) += deltaTime;
+		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
+		cameraDir.y = 0;
+		cameraDir = Mat3::GetRotation(0, PI / 2, 0) * cameraDir;
+		cameraPos -= cameraDir * deltaTime * 2;
+	}
+
+	if (keyboard[SDL_SCANCODE_SPACE]) {
+
+		cameraPos.y += 2 * deltaTime;
+	}
+	if (keyboard[SDL_SCANCODE_LSHIFT]) {
+
+		cameraPos.y -= 2 * deltaTime;
 	}
 
 	if (keyboard[SDL_SCANCODE_R]) {
@@ -179,13 +287,23 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	rotation = Mat4::GetRotation(r, 0, 0);
 
+	view = (Mat4::Get3DTranslation(cameraPos.x, cameraPos.y, cameraPos.z) * Mat4::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z)).GetInverse();
+
 	//renderer.SetFlags(RF_WIREFRAME);
 	//renderer.ClearFlags(RF_BACKFACE_CULL);
 
 	//renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader, TestPixelShader);
 	
+	renderer.DrawElementArray<SphereVertex, SpherePixel>(numI, indices, sv, ShadowVertexShader, ShadowPixelShader);
+
+	shadowMap = renderer.GetDepthBuffer();
+	//shadowMap.SaveToFile("images/shadowmap.bmp");
+	//exit(0);
+	renderer.ClearDepthBuffer();
+
 	renderer.DrawElementArray<SphereVertex, SpherePixel>(numI, indices, sv, SphereVertexShader, SpherePixelShader);
-	cb.Render(renderer, view, projection);
+	renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
+	//cb.Render(renderer, view, projection);
 
 	SDL_Event event = {};
 	while (SDL_PollEvent(&event)) {
@@ -200,11 +318,8 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 			if ((event.motion.xrel != 0 || event.motion.yrel != 0) && SDL_GetRelativeMouseMode() == SDL_TRUE) {
 
-				camXRot -= event.motion.yrel * 3.0f / 720;
-				camYRot -= event.motion.xrel * 3.0f / 720;
-
-				view = Mat4::GetRotation(camXRot, camYRot, 0);
-				view = view.GetInverse();
+				cameraRot.x -= event.motion.yrel * 3.0f / 720;
+				cameraRot.y -= event.motion.xrel * 3.0f / 720;
 
 			}
 
@@ -233,6 +348,8 @@ void PostProcess(Surface& frontBuffer) {
 
 
 int main(int argc, char* argv[]) {
+
+	texture.GenerateMipMaps();
 
 	Assimp::Importer importer;
 	const aiScene* scene = importer.ReadFile("models/OBJ/Cow2.obj", aiProcess_Triangulate);
@@ -264,7 +381,7 @@ int main(int argc, char* argv[]) {
 		norm.y = mesh->mNormals[i].y;
 		norm.z = mesh->mNormals[i].z;
 
-		boxVerts[i] = { pos, norm };
+		boxVerts[i] = { pos, norm, {0, 0} };
 
 	}
 	
@@ -284,7 +401,7 @@ int main(int argc, char* argv[]) {
 		sv[i].position = vertices[i];
 	}
 
-	StartDoubleBufferedInstance(window, RenderLogic, PostProcess, RF_BILINEAR | RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
+	StartDoubleBufferedInstance(window, RenderLogic, PostProcess,  RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
 
 	
 

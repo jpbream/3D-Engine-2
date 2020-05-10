@@ -104,16 +104,24 @@ public:
 		int width;
 		int height;
 
+		DepthBuffer(int width, int height);
+
 		inline void PutPixel(int x, int y, float depth) {
 			pDepths[width * y + x] = depth;
 		}
 
 	public:
-		DepthBuffer(int width, int height);
+		
+		DepthBuffer();
+		DepthBuffer(const DepthBuffer& db);
+		DepthBuffer& operator=(const DepthBuffer& db);
 		~DepthBuffer();
 
 		void Resize(int width, int height);
 		void SaveToFile(const std::string& filename) const;
+	
+		int GetWidth() const;
+		int GetHeight() const;
 
 		void WhiteOut();
 
@@ -203,8 +211,12 @@ public:
 
 		Vec4 LinearSample(const Surface& texture, const Vec2& texel) const {
 
+			// enables texture tiling
+			float s = texel.s - (int)texel.s;
+			float t = texel.t - (int)texel.t;
+
 			// completely regular texture sample
-			return texture.GetPixel((int)(texel.s * (texture.GetWidth() - 1)), (int)(texel.t * (texture.GetHeight() - 1)));
+			return texture.GetPixel((int)(s * (texture.GetWidth() - 1)), (int)(t * (texture.GetHeight() - 1)));
 		}
 
 		Vec4 BiLinearSample(const Surface& texture, const Vec2& texel) const {
@@ -212,9 +224,13 @@ public:
 			// Equations for a Bi Linear Sample
 			// From Section 7.5.4, "Mathematics for 3D Game Programming and Computer Graphics", Lengyel
 
+			// enables texture tiling
+			float s = texel.s - (int)texel.s;
+			float t = texel.t - (int)texel.t;
+
 			// texel location minus half a pixel in x and y
-			int i = (texture.GetWidth() * texel.s - 0.5);
-			int j = (texture.GetHeight() * texel.t - 0.5);
+			int i = (texture.GetWidth() * s - 0.5);
+			int j = (texture.GetHeight() * t - 0.5);
 
 			// fractional parts of the displaced texel location
 			float alpha = i - (int)i;
@@ -309,7 +325,7 @@ public:
 
 				// log2 of the greatest density is the mip map level
 				float mipMapLod = logf(fmaxf(densityX, densityY)) + 0.5;
-
+			
 				textureToSample = texture.GetMipMap((int)mipMapLod);
 
 				// only consider the trilinear flag if mipmapping is also enabled
@@ -872,6 +888,7 @@ private:
 					(acrossTravelerPixel.GetPos().w - NEAR) / (FAR - NEAR)
 					:
 					(1 / acrossTravelerPixel.GetPos().w - 1 / NEAR) / (1 / FAR - 1 / NEAR);
+				normalizedDepth = (acrossTravelerPixel.GetPos().z + 1) / 2;
 
 				// test the pixel agains the z buffer
 				if (TestAndSetPixel(x, y, normalizedDepth)) {

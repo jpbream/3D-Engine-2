@@ -291,6 +291,19 @@ Mat4 Mat4::GetPerspectiveProjection(float n, float f, float l, float r, float t,
 	};
 }
 
+Mat4 Mat4::GetOrthographicProjection(float n, float f, float l, float r, float t, float b)
+{
+	
+	return {
+		{2 / (r - l), 0, 0, 0},
+		{0, 2 / (t - b), 0, 0},
+		{0, 0, -2 / (f - n), 0},
+		{-(r + l) / (r - l), -(t + b) / (t  - b), -(f + n) / (f - n), 1}
+		//{0, 0, 0, 1}
+	};
+
+}
+
 std::ostream& operator<<(std::ostream& os, const Mat4& m) {
 
 	os << "[ " << m.data[0] << " " << m.data[4] << " " << m.data[8] << " " << m.data[12] << " ]" << std::endl;
