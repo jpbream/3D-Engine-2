@@ -4,6 +4,7 @@
 #include "Mat4.h"
 #include "Manager.h"
 #include "Cubemap.h"
+#include "Shapes.h""
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -24,6 +25,11 @@ Cubemap cb("cube/posx.jpg",
 	"cube/negy.jpg", 
 	"cube/posz.jpg", 
 	"cube/negz.jpg");
+
+int* indices;
+Vec4* vertices;
+int numI;
+int numV;
 
 class TestVertex {
 
@@ -82,6 +88,50 @@ Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampl
 
 }
 
+class SphereVertex {
+
+public:
+	Vec4 position;
+	SphereVertex() {}
+	SphereVertex(const Vec4& pos) : position(pos) {}
+};
+
+class SpherePixel : public Renderer::PixelShaderInput {
+
+public:
+	Vec4 position;
+	Vec3 normal;
+	Vec3 worldPos;
+	SpherePixel() {}
+	SpherePixel(const Vec4& v, const Vec3& normal) : position(v), normal(normal) {}
+
+	Vec4& GetPos() { return position; }
+};
+SphereVertex* sv;
+
+SpherePixel SphereVertexShader(SphereVertex& v) {
+
+	Vec4 worldPos = view * translation * rotation * scale * v.position;
+	Vec4 thing = projection * worldPos;
+	Vec3 norm =  rotation.Truncate() * Vec3(v.position.x, v.position.y, v.position.z);
+
+	SpherePixel tp(thing, norm);
+	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
+
+	return tp;
+}
+
+Vec4 SpherePixelShader(SpherePixel& sp, const Renderer::Sampler<SpherePixel>& samp) {
+
+	Vec3 toCam = view.Truncate().GetInverse() * (Vec3(0, 0, 0) - sp.worldPos);
+	//Vec3 reflect = toCam.Reflect(sp.normal);
+	Vec3 reflect = toCam.Refract(sp.normal, 1, 1.33);
+
+	Vec4 col = samp.SampleCubeMap(cb.GetPlanes(), reflect.x, reflect.y, reflect.z);
+
+	return { col.r, col.g * 0.5f, col.b * 0.5f, 1 };
+}
+
 int numBoxIndices = 0;
 int* boxIndices;
 TestVertex* boxVerts;
@@ -94,30 +144,30 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
 
 	if (keyboard[SDL_SCANCODE_Q]) {
-		r -= .8 * deltaTime;
+		r -= .8f * deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_E]) {
-		r += .8 * deltaTime;
+		r += .8f * deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_W]) {
-		translation(2, 3) -= 1 * deltaTime;
+		translation(2, 3) -= deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_S]) {
-		translation(2, 3) += 1 * deltaTime;
+		translation(2, 3) += deltaTime;
 	}
 
 	if (keyboard[SDL_SCANCODE_A]) {
-		translation(0, 3) -= 1 * deltaTime;
+		translation(0, 3) -= deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_D]) {
-		translation(0, 3) += 1 * deltaTime;
+		translation(0, 3) += deltaTime;
 	}
 
 	if (keyboard[SDL_SCANCODE_R]) {
-		translation(1, 3) -= 1 * deltaTime;
+		translation(1, 3) -= deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_F]) {
-		translation(1, 3) += 1 * deltaTime;
+		translation(1, 3) += deltaTime;
 	}
 
 	if (keyboard[SDL_SCANCODE_I]) {
@@ -127,11 +177,15 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 		SDL_SetRelativeMouseMode(SDL_FALSE);
 	}
 
-	rotation = Mat4::GetRotation(0, r, 0);
+	rotation = Mat4::GetRotation(r, 0, 0);
 
-	renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader, TestPixelShader);
-	cb.Render(renderer, view, projection);
+	//renderer.SetFlags(RF_WIREFRAME);
+	//renderer.ClearFlags(RF_BACKFACE_CULL);
+
+	//renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader, TestPixelShader);
 	
+	renderer.DrawElementArray<SphereVertex, SpherePixel>(numI, indices, sv, SphereVertexShader, SpherePixelShader);
+	cb.Render(renderer, view, projection);
 
 	SDL_Event event = {};
 	while (SDL_PollEvent(&event)) {
@@ -146,8 +200,8 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 			if ((event.motion.xrel != 0 || event.motion.yrel != 0) && SDL_GetRelativeMouseMode() == SDL_TRUE) {
 
-				camXRot -= event.motion.yrel * PI / 720;
-				camYRot -= event.motion.xrel * PI / 720;
+				camXRot -= event.motion.yrel * 3.0f / 720;
+				camYRot -= event.motion.xrel * 3.0f / 720;
 
 				view = Mat4::GetRotation(camXRot, camYRot, 0);
 				view = view.GetInverse();
@@ -158,6 +212,7 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 		}
 			
 	}
+	return false;
 
 }
 
@@ -166,6 +221,13 @@ void PostProcess(Surface& frontBuffer) {
 	//frontBuffer.GaussianBlur(10, 3, Surface::BLUR_BOTH);
 	//frontBuffer.Invert();
 	//frontBuffer.SetContrast(0.3);
+
+	int numKeys;
+	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
+
+	if (keyboard[SDL_SCANCODE_P]) {
+		frontBuffer.SaveToFile("images/Screenshot.bmp");
+	}
 
 }
 
@@ -180,7 +242,7 @@ int main(int argc, char* argv[]) {
 	numBoxIndices = mesh->mNumFaces * 3;
 	boxIndices = new int[ numBoxIndices ];
 
-	for (int i = 0; i < mesh->mNumFaces; ++i) {
+	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
 
 		boxIndices[3 * i] = mesh->mFaces[i].mIndices[0];
 		boxIndices[3 * i + 1] = mesh->mFaces[i].mIndices[1];
@@ -189,7 +251,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	boxVerts = new TestVertex[mesh->mNumVertices];
-	for (int i = 0; i < mesh->mNumVertices; ++i) {
+	for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
 
 		Vec4 pos; 
 		pos.x = mesh->mVertices[i].x;
@@ -211,9 +273,16 @@ int main(int argc, char* argv[]) {
 	//texture.GenerateMipMaps();
 	//texture.Tint({ 1, 0, 0, 1 }, 0.2);
 	
-	Window window("My Window", 20, 20, 1000, 1000, 0);
+	// 2560, 1440
+	Window window("My Window", 20, 20, 2560, 1440, 0);
 
 	projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
+
+	Shapes::MakeSphere(20, 2, &numI, &numV, &indices, &vertices);
+	sv = new SphereVertex[numV];
+	for (int i = 0; i < numV; ++i) {
+		sv[i].position = vertices[i];
+	}
 
 	StartDoubleBufferedInstance(window, RenderLogic, PostProcess, RF_BILINEAR | RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
 
@@ -229,6 +298,12 @@ int main(int argc, char* argv[]) {
 	//window.DrawSurface(s);
 	//window.BlockUntilQuit();
 
+	//window.DrawSurface(s);
+	//window.BlockUntilQuit();
+
+	delete[] indices;
+	delete[] vertices;
+	delete[] sv;
 
 	delete[] boxIndices;
 	delete[] boxVerts;

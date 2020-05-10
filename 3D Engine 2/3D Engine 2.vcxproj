@@ -118,6 +118,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)Dependencies\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -155,6 +156,7 @@
     <ClCompile Include="Mat3.cpp" />
     <ClCompile Include="Mat4.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="Shapes.cpp" />
     <ClCompile Include="STB_Image_Wrapper.cpp" />
     <ClCompile Include="Surface.cpp" />
     <ClCompile Include="Vec2.cpp" />
@@ -171,6 +173,7 @@
     <ClInclude Include="Mat3.h" />
     <ClInclude Include="Mat4.h" />
     <ClInclude Include="Renderer.h" />
+    <ClInclude Include="Shapes.h" />
     <ClInclude Include="STB_Image_Wrapper.h" />
     <ClInclude Include="Surface.h" />
     <ClInclude Include="Vec2.h" />

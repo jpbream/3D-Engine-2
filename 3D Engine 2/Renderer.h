@@ -1,5 +1,4 @@
 #pragma once
-
 #include "Surface.h"
 #include "Vec2.h"
 #include "Vec3.h"
@@ -10,11 +9,11 @@
 #include <vector>
 
 #ifndef NEAR
-#define NEAR 1.0
+#define NEAR 1.0f
 #endif
 
 #ifndef FAR
-#define FAR 100.0
+#define FAR 100.0f
 #endif
 
 #ifndef _DEBUG
@@ -26,6 +25,9 @@
 #define X_OFFSET 0
 #define Y_OFFSET 1
 #define Z_OFFSET 2
+
+#define FLAT_TOP 1
+#define FLAT_BOTTOM 2
 
 #define RF_LINEAR_ZBUF 0b0000000000000001
 #define RF_BACKFACE_CULL 0b0000000000000010
@@ -133,21 +135,20 @@ public:
 
 		bool flatTop;
 
-		const Pixel* topVertex;
+		const Pixel* topVertex = nullptr;
 		const Pixel* leftVertex;
 		const Pixel* rightVertex;
-		const Pixel* bottomVertex;
+		const Pixel* bottomVertex = nullptr;
 
-		const Vec2* topScreen;
+		const Vec2* topScreen = nullptr;
 		const Vec2* leftScreen;
 		const Vec2* rightScreen;
-		const Vec2* bottomScreen;
+		const Vec2* bottomScreen = nullptr;
 
 		const int& xCoord;
 		const int& yCoord;
 
 		const Pixel& current;
-		Pixel previous;
 		std::unordered_map<int, Pixel> aboveLookup;
 
 		mutable bool newScanline = true;
@@ -203,7 +204,7 @@ public:
 		Vec4 LinearSample(const Surface& texture, const Vec2& texel) const {
 
 			// completely regular texture sample
-			return texture.GetPixel(texel.s * (texture.GetWidth() - 1), texel.t * (texture.GetHeight() - 1));
+			return texture.GetPixel((int)(texel.s * (texture.GetWidth() - 1)), (int)(texel.t * (texture.GetHeight() - 1)));
 		}
 
 		Vec4 BiLinearSample(const Surface& texture, const Vec2& texel) const {
@@ -263,7 +264,7 @@ public:
 
 			}
 
-			aboveLookup.reserve(rightScreen->x - leftScreen->x + 1);
+			aboveLookup.reserve((unsigned int)(rightScreen->x - leftScreen->x + 1));
 		}
 
 		Vec4 SampleTex2D(const Surface& texture, int texelOffsetIntoPixel) const {
@@ -284,12 +285,11 @@ public:
 				// if it is the beginning of a new scanline, it is possible there is a pixel above but
 				// the previous pixel is on the previous scanline
 
-				const Pixel pixel2 = aboveLookup.count(xCoord) && !newScanline ? previous : GetInterpolatedPixel(xCoord - 1, yCoord);
-				//const Pixel pixel2 = GetInterpolatedPixel(xCoord + 1, yCoord);
+				// the previous can be retrieved from the previous entry in the hash map
+				const Pixel pixel2 = aboveLookup.count(xCoord) && !newScanline ? aboveLookup.at(xCoord - 1) : GetInterpolatedPixel(xCoord - 1, yCoord);
 				const Vec2& texel2 = *(Vec2*)((float*)&pixel2 + texelOffsetIntoPixel);
 
 				const Pixel pixel3 = aboveLookup.count(xCoord) && !newScanline ? aboveLookup.at(xCoord) : GetInterpolatedPixel(xCoord, yCoord - 1);
-				//const Pixel pixel3 = GetInterpolatedPixel(xCoord, yCoord + 1);
 				const Vec2& texel3 = *(Vec2*)((float*)&pixel3 + texelOffsetIntoPixel);
 
 				// we have processed a pixel, so are no longer on the first pixel of a scanline
@@ -355,15 +355,15 @@ public:
 				if (s > 0) {
 					// positive x
 					surfaceToSample = &planes[0];
-					finalS = 0.5 - p / (2 * s);
-					finalT = 0.5 - t / (2 * s);
+					finalS = 0.5f - p / (2 * s);
+					finalT = 0.5f - t / (2 * s);
 
 				}
 				else {
 					// negative x
 					surfaceToSample = &planes[1];
-					finalS = 0.5 - p / (2 * s);
-					finalT = 0.5 + t / (2 * s);
+					finalS = 0.5f - p / (2 * s);
+					finalT = 0.5f + t / (2 * s);
 				}
 
 			}
@@ -372,14 +372,14 @@ public:
 				if (t > 0) {
 					// positive y
 					surfaceToSample = &planes[2];
-					finalS = 0.5 + s / (2 * t);
-					finalT = 0.5 + p / (2 * t);
+					finalS = 0.5f + s / (2 * t);
+					finalT = 0.5f + p / (2 * t);
 				}
 				else {
 					// negative y
 					surfaceToSample = &planes[3];
-					finalS = 0.5 - s / (2 * t);
-					finalT = 0.5 + p / (2 * t);
+					finalS = 0.5f - s / (2 * t);
+					finalT = 0.5f + p / (2 * t);
 				}
 
 			}
@@ -387,14 +387,14 @@ public:
 				if (p > 0) {
 					// positive z
 					surfaceToSample = &planes[4];
-					finalS = 0.5 + s / (2 * p);
-					finalT = 0.5 - t / (2 * p);
+					finalS = 0.5f + s / (2 * p);
+					finalT = 0.5f - t / (2 * p);
 				}
 				else {
 					// negative z
 					surfaceToSample = &planes[5];
-					finalS = 0.5 + s / (2 * p);
-					finalT = 0.5 + t / (2 * p);
+					finalS = 0.5f + s / (2 * p);
+					finalT = 0.5f + t / (2 * p);
 				}
 			}
 
@@ -640,21 +640,32 @@ private:
 		}
 
 		//calculate pixel coordinates
-		Vec2 v1Screen((int)((p1.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 0.1) / 2.0),
-			(int)((-p1.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2.0));
 
-		Vec2 v2Screen((int)((p2.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 0.1) / 2.0),
-			(int)((-p2.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2.0));
+		// all of these casts are to get rid of compiler warnings, here is what is actually happening
+		// screen x = (vec.x + 1) * (screen width / 2)
+		// screen y = (-vec.y + 1) * (screeh height / 2)
 
-		Vec2 v3Screen((int)((p3.GetPos().x + 1.0) * (pRenderTarget->GetWidth() - 0.1) / 2.0),
-			(int)((-p3.GetPos().y + 1.0) * (pRenderTarget->GetHeight()) / 2.0));
+		// 0.1 is being subtracted from screen width to keep pixels from spilling from the right edge
+		// of the screen to the left edge of the screen
+
+		// all pixel values must be rounded down (int) to prevent fill gaps
+		// im not sure why it works but it does
+
+		Vec2 v1Screen((float)(int)((float)(p1.GetPos().x + 1.0f) * ((float)pRenderTarget->GetWidth() - 0.1f) / 2.0f),
+			(float)(int)((-(float)p1.GetPos().y + 1.0f) * (float)((pRenderTarget->GetHeight() - 0.1f) / 2)));
+
+		Vec2 v2Screen((float)(int)(((float)p2.GetPos().x + 1.0f) * ((float)pRenderTarget->GetWidth() - 0.1f) / 2.0f),
+			(float)(int)((-(float)p2.GetPos().y + 1.0f) * (float)((pRenderTarget->GetHeight() - 0.1f) / 2)));
+
+		Vec2 v3Screen((float)(int)(((float)p3.GetPos().x + 1.0f) * ((float)pRenderTarget->GetWidth() - 0.1f) / 2.0f),
+			(float)(int)((-(float)p3.GetPos().y + 1.0f) * (float)((pRenderTarget->GetHeight() - 0.1f) / 2)));
 
 		// if wireframe mode is enabled
 		if (flags & RF_WIREFRAME) {
 
-			pRenderTarget->DrawLine(v1Screen.x, v1Screen.y, v2Screen.x, v2Screen.y, 0xffffffff);
-			pRenderTarget->DrawLine(v1Screen.x, v1Screen.y, v3Screen.x, v3Screen.y, 0xffffffff);
-			pRenderTarget->DrawLine(v3Screen.x, v3Screen.y, v2Screen.x, v2Screen.y, 0xffffffff);
+			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v2Screen.x, (int)v2Screen.y, 0xffffffff);
+			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v3Screen.x, (int)v3Screen.y, 0xffffffff);
+			pRenderTarget->DrawLine((int)v3Screen.x, (int)v3Screen.y, (int)v2Screen.x, (int)v2Screen.y, 0xffffffff);
 
 			return;
 
@@ -704,51 +715,40 @@ private:
 		if (cutScreen.x > middleScreen->x) {
 
 			// cut is on the right
-#ifndef _DEBUG
 			if (usingThreads) {
 
-				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel, Mesh, PSPtr>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
-				DrawFlatTop<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
 				flatBottom.join();
 			}
 			else {
 
-				DrawFlatBottom<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
-				DrawFlatTop<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+				DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
 			}
-#else
-			DrawFlatBottom<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
-			DrawFlatTop<Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
-#endif
 	
 		}
 		else {
 
 			// cut is on the left
-#ifndef _DEBUG
 			if (usingThreads) {
 
-				std::thread flatBottom(&Renderer::DrawFlatBottom<Pixel, Mesh, PSPtr>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
-				DrawFlatTop<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
 				flatBottom.join();
 			}
 			else {
-				DrawFlatBottom<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
-				DrawFlatTop<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+				DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
 			}
-#else
-			DrawFlatBottom<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
-			DrawFlatTop<Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
-#endif
-
 		}
 
 		// if outlines mode is enabled
 		if (flags & RF_OUTLINES) {
 
-			pRenderTarget->DrawLine(v1Screen.x, v1Screen.y, v2Screen.x, v2Screen.y, 0xffffffff);
-			pRenderTarget->DrawLine(v1Screen.x, v1Screen.y, v3Screen.x, v3Screen.y, 0xffffffff);
-			pRenderTarget->DrawLine(v3Screen.x, v3Screen.y, v2Screen.x, v2Screen.y, 0xffffffff);
+			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v2Screen.x, (int)v2Screen.y, 0xffffffff);
+			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v3Screen.x, (int)v3Screen.y, 0xffffffff);
+			pRenderTarget->DrawLine((int)v3Screen.x, (int)v3Screen.y, (int)v2Screen.x, (int)v2Screen.y, 0xffffffff);
 
 		}
 	}
@@ -770,116 +770,63 @@ private:
 
 	}
 
-	template <class Pixel, class Mesh, typename PSPtr>
-	void DrawFlatBottom(Pixel& leftPixel, Vec2& leftScreen, Pixel& topPixel, Vec2& topScreen, Pixel& rightPixel, Vec2& rightScreen, PSPtr PixelShader) {
+	template <int TYPE, class Pixel, class Mesh, typename PSPtr>
+	void DrawHalfTriangle(Pixel& leftPixel, Vec2& leftScreen, Pixel& otherPixel, Vec2& otherScreen, Pixel& rightPixel, Vec2& rightScreen, PSPtr PixelShader) {
+		
+		// incase an invalid triangle type gets passed in
+		if constexpr (TYPE != FLAT_TOP && TYPE != FLAT_BOTTOM)
+			return;
+		
+		// if type is flat top, other pixel/screen are the bottom
+		// if type is flat bottom, other pixel/screen are the top
 
 		// absolute highest and lowest pixels of the triangle
-		int pixelTop = (int)ceil(topScreen.y - 0.5);
-		int pixelBottom = (int)ceil(leftScreen.y - 0.5);
+		int pixelTop, pixelBottom;
 
-		// will walk down the left edge of the triangle
-		Pixel leftTravelerPixel = topPixel;
-		Vec2 leftTravelerScreen = topScreen;
-
-		// will walk down the right edge of the triangle
-		Pixel rightTravelerPixel = topPixel;
-		Vec2 rightTravelerScreen = topScreen;
-
-		// initialize y and x to top pixel for sampler
-		int y = pixelTop;
-		int x = (int)ceil(topScreen.x - 0.5);
-
-		// will walk across the scanlines
-		Pixel acrossTravelerPixel = topPixel;
-	
-		// create 2d sampler for this flat bottom triangle
-		Sampler<Pixel> sampler2d(*this, acrossTravelerPixel, &leftPixel, &leftScreen, &topPixel, &topScreen, &rightPixel, &rightScreen, false, x, y);
-
-		for (y = pixelTop; y < pixelBottom; ++y) {
-
-			// % of the way down the triangle we are
-			float howFarDown = (float)(y - pixelTop) / (pixelBottom - pixelTop);
-
-			// interpolate the travelers down the left and right edges of the triangle
-			leftTravelerPixel = Lerp(topPixel, leftPixel, howFarDown);
-			leftTravelerScreen = topScreen * (1 - howFarDown) + leftScreen * howFarDown;
-
-			rightTravelerPixel = Lerp(topPixel, rightPixel, howFarDown);
-			rightTravelerScreen = topScreen * (1 - howFarDown) + rightScreen * howFarDown;
-
-			// left and rightmost pixels in this scanline
-			int pixelLeft = (int)ceil(leftTravelerScreen.x - 0.5);
-			int pixelRight = (int)ceil(rightTravelerScreen.x - 0.5);
-
-			// will walk across this scanline
-			acrossTravelerPixel = leftTravelerPixel;
-
-			for (x = pixelLeft; x <= pixelRight; ++x) {
-
-				// % of the way across the scanline we are
-				float howFarAcross = (float)(x - pixelLeft) / (pixelRight - pixelLeft);
-
-				// interpolate the traveler across the scanline
-				acrossTravelerPixel = Lerp(leftTravelerPixel, rightTravelerPixel, howFarAcross);
-
-				// undo the perspective correct interpolation
-				FlipPerspective(acrossTravelerPixel);
-
-				// get the depth and normalize from 0 to 1, use w for depth
-				float normalizedDepth = flags & RF_LINEAR_ZBUF ?
-					(acrossTravelerPixel.GetPos().w - NEAR) / (FAR - NEAR)
-					: 
-					(1 / acrossTravelerPixel.GetPos().w - 1 / NEAR) / (1 / FAR - 1 / NEAR);
-
-				// test the pixel against the z buffer
-				if (TestAndSetPixel(x, y, normalizedDepth)) {
-					
-					// run the pixel shader
-					Vec4 pixelColor = RunPixelShader<Pixel, Mesh, PSPtr>(PixelShader, acrossTravelerPixel, sampler2d);
-					pRenderTarget->PutPixel(x, y, pixelColor);
-
-				}
-
-				// update the sampler before flipping the perspective
-				sampler2d.previous = sampler2d.current;
-				sampler2d.aboveLookup[x] = sampler2d.current;
-
-				// redo the perspective correct interpolation
-				FlipPerspective(acrossTravelerPixel);
-
-			}
-
-			// tell the sampler that a new scan line is beginning
-			sampler2d.newScanline = true;
-
+		if constexpr (TYPE == FLAT_TOP) {
+			pixelTop = (int)ceil(leftScreen.y - 0.5);
+			pixelBottom = (int)ceil(otherScreen.y - 0.5);
+		}
+		else if constexpr (TYPE == FLAT_BOTTOM) {
+			pixelTop = (int)ceil(otherScreen.y - 0.5);
+			pixelBottom = (int)ceil(leftScreen.y - 0.5);
 		}
 
-	}
+		// will walk down the left and right edges of the triangle
+		Pixel leftTravelerPixel, rightTravelerPixel;
+		Vec2 leftTravelerScreen, rightTravelerScreen;
 
-	template <class Pixel, class Mesh, typename PSPtr>
-	void DrawFlatTop(Pixel& leftPixel, Vec2& leftScreen, Pixel& bottomPixel, Vec2& bottomScreen, Pixel& rightPixel, Vec2& rightScreen, PSPtr PixelShader) {
-		
-		// absolute highest and lowest pixels of the triangle
-		int pixelTop = (int)ceil(leftScreen.y - 0.5);
-		int pixelBottom = (int)ceil(bottomScreen.y - 0.5);
+		if constexpr (TYPE == FLAT_TOP) {
+			leftTravelerPixel = leftPixel;
+			leftTravelerScreen = leftScreen;
+		}
+		else if constexpr (TYPE == FLAT_BOTTOM) {
+			leftTravelerPixel = otherPixel;
+			leftTravelerScreen = otherScreen;
+		}
 
-		// will walk down the left edge of the triangle
-		Pixel leftTravelerPixel = leftPixel;
-		Vec2 leftTravelerScreen = leftScreen;
+		if constexpr (TYPE == FLAT_TOP) {
+			rightTravelerPixel = rightPixel;
+			rightTravelerScreen = rightScreen;
+		}
+		else if constexpr (TYPE == FLAT_BOTTOM) {
+			rightTravelerPixel = otherPixel;
+			rightTravelerScreen = otherScreen;
+		}
 
-		// will walk down the right edge of the triangle
-		Pixel rightTravelerPixel = rightPixel;
-		Vec2 rightTravelerScreen = rightScreen;
-
-		// initialize y and x to left pixel for sampler
-		int y = pixelTop;
-		int x = (int)ceil(leftScreen.x - 0.5);
+		// create x and y here for the sampler
+		int x, y;
 
 		// will walk across the scanlines
-		Pixel acrossTravelerPixel = leftPixel;
+		Pixel acrossTravelerPixel;
+
+		if constexpr (TYPE == FLAT_TOP)
+			acrossTravelerPixel = leftPixel;
+		else if constexpr (TYPE == FLAT_BOTTOM)
+			acrossTravelerPixel = otherPixel;
 
 		// create 2d sampler for this flat top triangle
-		Sampler<Pixel> sampler2d(*this, acrossTravelerPixel, &leftPixel, &leftScreen, &bottomPixel, &bottomScreen, &rightPixel, &rightScreen, true, x, y);
+		Sampler<Pixel> sampler2d(*this, acrossTravelerPixel, &leftPixel, &leftScreen, &otherPixel, &otherScreen, &rightPixel, &rightScreen, TYPE == FLAT_TOP, x, y);
 		
 		for (y = pixelTop; y < pixelBottom; ++y) {
 			
@@ -887,11 +834,20 @@ private:
 			float howFarDown = (float)(y - pixelTop) / (pixelBottom - pixelTop);
 
 			// interpolate the travelers down the left and right edges of the triangle
-			leftTravelerPixel = Lerp(leftPixel, bottomPixel, howFarDown);
-			leftTravelerScreen = leftScreen * (1 - howFarDown) + bottomScreen * howFarDown;
+			if constexpr (TYPE == FLAT_TOP) {
 
-			rightTravelerPixel = Lerp(rightPixel, bottomPixel, howFarDown);
-			rightTravelerScreen = rightScreen * (1 - howFarDown) + bottomScreen * howFarDown;
+				leftTravelerPixel = Lerp(leftPixel, otherPixel, howFarDown);
+				leftTravelerScreen = leftScreen * (1 - howFarDown) + otherScreen * howFarDown;
+				rightTravelerPixel = Lerp(rightPixel, otherPixel, howFarDown);
+				rightTravelerScreen = rightScreen * (1 - howFarDown) + otherScreen * howFarDown;
+			}
+			else if constexpr (TYPE == FLAT_BOTTOM) {
+
+				leftTravelerPixel = Lerp(otherPixel, leftPixel, howFarDown);
+				leftTravelerScreen = otherScreen * (1 - howFarDown) + leftScreen * howFarDown;
+				rightTravelerPixel = Lerp(otherPixel, rightPixel, howFarDown);
+				rightTravelerScreen = otherScreen * (1 - howFarDown) + rightScreen * howFarDown;
+			}
 
 			// left and rightmost pixels in this scanline
 			int pixelLeft = (int)ceil(leftTravelerScreen.x - 0.5);
@@ -927,7 +883,6 @@ private:
 				}
 
 				// update the sampler before flipping the perspective
-				sampler2d.previous = sampler2d.current;
 				sampler2d.aboveLookup[x] = sampler2d.current;
 
 				// redo the perspective correct interpolation
@@ -1020,7 +975,7 @@ private:
 		}
 
 		// wait for all threads to finish before returning
-		for (int i = 0; i < threads.size(); i++)
+		for (unsigned int i = 0u; i < threads.size(); i++)
 			threads[i].join();
 
 		usingThreads = false;

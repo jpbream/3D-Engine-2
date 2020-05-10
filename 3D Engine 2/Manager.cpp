@@ -93,7 +93,7 @@ void StartDoubleBufferedInstance(Window& window, bool(*ProgramLogic)(Renderer& r
 		static Uint64 interval = SDL_GetPerformanceFrequency();
 
 		
-		deltaTime = (end - start) / (double)interval;
+		deltaTime = (end - start) / (float)interval;
 
 #ifdef DIAGNOSTICS
 		totalTime += deltaTime;
@@ -146,7 +146,7 @@ void StartSingleBufferedInstance(Window& window, bool (*ProgramLogic)(Surface& b
 		Uint64 end = SDL_GetPerformanceCounter();
 		static Uint64 interval = SDL_GetPerformanceFrequency();
 
-		deltaTime = (end - start) / (double)interval;
+		deltaTime = (end - start) / (float)interval;
 
 #ifdef DIAGNOSTICS
 		totalTime += deltaTime;
