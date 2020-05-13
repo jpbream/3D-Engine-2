@@ -299,7 +299,6 @@ Mat4 Mat4::GetOrthographicProjection(float n, float f, float l, float r, float t
 		{0, 2 / (t - b), 0, 0},
 		{0, 0, -2 / (f - n), 0},
 		{-(r + l) / (r - l), -(t + b) / (t  - b), -(f + n) / (f - n), 1}
-		//{0, 0, 0, 1}
 	};
 
 }

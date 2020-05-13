@@ -58,6 +58,10 @@ bool Renderer::TestFlags(short flags) const {
 
 }
 
+Surface& Renderer::GetRenderTarget() {
+	return *pRenderTarget;
+}
+
 Renderer::DepthBuffer::DepthBuffer(int width, int height) : width(width), height(height) {
 
 	pDepths = new float[width * height];
@@ -94,7 +98,7 @@ Renderer::DepthBuffer::~DepthBuffer() {
 
 void Renderer::DepthBuffer::Resize(int width, int height) {
 
-	if (width * height > this->width* this->height) {
+	if (width * height > this->width * this->height) {
 
 		delete[] pDepths;
 		pDepths = new float[width * height];

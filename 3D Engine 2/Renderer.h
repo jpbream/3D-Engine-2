@@ -111,7 +111,7 @@ public:
 		}
 
 	public:
-		
+
 		DepthBuffer();
 		DepthBuffer(const DepthBuffer& db);
 		DepthBuffer& operator=(const DepthBuffer& db);
@@ -119,13 +119,14 @@ public:
 
 		void Resize(int width, int height);
 		void SaveToFile(const std::string& filename) const;
-	
+
 		int GetWidth() const;
 		int GetHeight() const;
 
 		void WhiteOut();
 
 		inline float GetPixel(int x, int y) const {
+
 			return pDepths[y * width + x];
 		}
 
@@ -418,7 +419,6 @@ public:
 			return LinearSample(*surfaceToSample, { finalS, finalT });
 
 		}
-
 	};
 
 private:
@@ -584,10 +584,10 @@ private:
 		// a = (w1 +- x1) / ((w1 +- x1) - (w2 +- x2)), from "Clipping Using Homogeneous Coordinates", Blinn, Newell
 		float alpha1 = (outside.GetPos().w + signOfPlane * outsideValue) / ((outside.GetPos().w + signOfPlane * outsideValue) - (inside1.GetPos().w + signOfPlane * inside1Value));
 		float alpha2 = (outside.GetPos().w + signOfPlane * outsideValue) / ((outside.GetPos().w + signOfPlane * outsideValue) - (inside2.GetPos().w + signOfPlane * inside2Value));
-
+		
 		Pixel n1 = Lerp(outside, inside1, alpha1);
 		Pixel n2 = Lerp(outside, inside2, alpha2);
-
+		
 		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, inside1, inside2, PixelShader, nextIteration);
 		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, inside2, n2, PixelShader, nextIteration);
 
@@ -606,10 +606,10 @@ private:
 		// a = (w1 +- x1) / ((w1 +- x1) - (w2 +- x2)), from "Clipping Using Homogeneous Coordinates", Blinn, Newell
 		float alpha1 = (outside1.GetPos().w + signOfPlane * outside1Value) / ((outside1.GetPos().w + signOfPlane * outside1Value) - (inside.GetPos().w + signOfPlane * insideValue));
 		float alpha2 = (outside2.GetPos().w + signOfPlane * outside2Value) / ((outside2.GetPos().w + signOfPlane * outside2Value) - (inside.GetPos().w + signOfPlane * insideValue));
-
+		
 		Pixel n1 = Lerp(outside1, inside, alpha1);
 		Pixel n2 = Lerp(outside2, inside, alpha2);
-
+		
 		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, n2, inside, PixelShader, nextIteration);
 
 	}
@@ -1034,5 +1034,7 @@ public:
 	void SetFlags(short flags);
 	void ClearFlags(short flags);
 	bool TestFlags(short flags) const;
+
+	Surface& GetRenderTarget();
 
 };
