@@ -1,4 +1,5 @@
 #include "Vec3.h"
+#include "Vec4.h"
 #include <math.h>
 
 Vec3::Vec3() : x(0), y(0), z(0) {}
@@ -126,6 +127,15 @@ Vec3 Vec3::Refract(const Vec3& normal, float n1, float n2) const {
 
 	return normNormal * coefficient - thisNormal * nRatio;
 
+}
+
+Vec3 Vec3::Modulate(const Vec3& v1, const Vec3& v2) {
+
+	return { v1.r * v2.r, v1.g * v2.g, v1.b * v2.b };
+}
+
+Vec4 Vec3::Vec4() const {
+	return { x, y, z, 1 };
 }
 
 std::ostream& operator<<(std::ostream& os, const Vec3& v) {

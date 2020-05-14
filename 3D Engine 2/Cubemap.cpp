@@ -1,5 +1,7 @@
 #include "Cubemap.h"
 
+#define FAR 50
+
 const int Cubemap::NUM_TRIANGLES = 12;
 
 int Cubemap::INDICES[36] = {
@@ -44,7 +46,7 @@ Cubemap::Cubemap(
 	const std::string& negz
 ) :
 	posx(posx), negx(negx), posy(posy), negy(negy), posz(posz), negz(negz),
-	transform(Mat4::GetScale(FAR - 1, FAR - 1, FAR - 1))
+	transform(Mat4::GetScale(FAR, FAR, FAR))
 
 {
 

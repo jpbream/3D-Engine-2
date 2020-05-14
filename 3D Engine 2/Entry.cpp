@@ -5,7 +5,7 @@
 #include "Manager.h"
 #include "Cubemap.h"
 #include "Shapes.h"
-#include "Frustum.h"
+#include "Light.h"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -21,19 +21,12 @@ Frustum projFrustum;
 Mat4 projection;
 Mat4 view;
 
-Mat4 lightView;
-
 Vec3 cameraPos(0, 6, 0);
-Vec3 cameraRot(-PI / 6, 0, 0);
-
-Mat4 mViewport = { {.5, 0, 0, 0}, {0, -.5, 0, 0}, {0, 0, .5, 0}, {.5, .5, .5, 1} };
-
-Frustum boundingBox;
-Mat4 orthographic;
-Renderer::DepthBuffer shadowMap;
+Vec3 cameraRot(11 * PI / 6, 0, 0);
 
 //Vec3 lightDir(0, 0, -1);
-Vec3 lightRot(-PI * 2 / 2.2, 0, 0);
+Vec3 lightRot(-PI * 2 / 2.2 + 2 * PI, 0, 0);
+DirectionalLight dl({ 1, 1, 1 }, lightRot, 2000, 2000);
 
 Surface texture("images/grass.jpg");
 
@@ -44,65 +37,7 @@ Cubemap cb("cube/posx.jpg",
 	"cube/posz.jpg", 
 	"cube/negz.jpg");
 
-int* indices;
-Vec4* vertices;
-int numI;
-int numV;
-
-Frustum GetFrustumBoundingBox(const Frustum& frustum, const Mat4& boxSpaceViewMatrix, const Mat4& camToWorldMatrix) {
-
-	Vec4 frustumPoints[8];
-
-	frustumPoints[0] = {frustum.left, frustum.bottom, -frustum.near, 1};
-	frustumPoints[1] = {frustum.right, frustum.bottom, -frustum.near, 1};
-	frustumPoints[2] = { frustum.right, frustum.top, -frustum.near, 1 };
-	frustumPoints[3] = { frustum.left, frustum.top, -frustum.near, 1 };
-
-	float farFactor = (frustum.near + frustum.far) / frustum.near;
-
-	frustumPoints[4] = { frustum.left * farFactor, frustum.bottom * farFactor, -frustum.far, 1 };
-	frustumPoints[5] = { frustum.right * farFactor, frustum.bottom * farFactor, -frustum.far, 1 };
-	frustumPoints[6] = { frustum.right * farFactor, frustum.top * farFactor, -frustum.far, 1 };
-	frustumPoints[7] = { frustum.left * farFactor, frustum.top * farFactor, -frustum.far, 1 };
-
-	// convert to the box space
-	for (int i = 0; i < 8; ++i) {
-		frustumPoints[i] = boxSpaceViewMatrix * camToWorldMatrix * frustumPoints[i];
-	}
-
-	float maxX = frustumPoints[0].x; float minX = frustumPoints[0].x;
-	float maxY = frustumPoints[0].y; float minY = frustumPoints[0].y;
-	float maxZ = frustumPoints[0].z; float minZ = frustumPoints[0].z;
-
-	for (int i = 1; i < 8; ++i) {
-
-		if (frustumPoints[i].x > maxX)
-			maxX = frustumPoints[i].x;
-		if (frustumPoints[i].x < minX)
-			minX = frustumPoints[i].x;
-
-		if (frustumPoints[i].y > maxY)
-			maxY = frustumPoints[i].y;
-		if (frustumPoints[i].y < minY)
-			minY = frustumPoints[i].y;
-
-		if (frustumPoints[i].z > maxZ)
-			maxZ = frustumPoints[i].z;
-		if (frustumPoints[i].z < minZ)
-			minZ = frustumPoints[i].z;
-
-	}
-
-	Frustum f;
-	f.near = -maxZ - 10;
-	f.far = -minZ;
-	f.left = minX;
-	f.right = maxX;
-	f.top = maxY;
-	f.bottom = minY;
-
-	return f;
-}
+Sphere sphere(20, 2);
 
 class TestVertex {
 
@@ -145,7 +80,7 @@ TestPixel TestVertexShader(TestVertex& vertex) {
 
 	Mat4 mObject = translation2 * rotation2 * scale2;
 
-	Vec4 s = mViewport * orthographic * lightView  * mObject * vertex.position;
+	Vec4 s = dl.WorldToViewportTransform(mObject * vertex.position);
 	tp.shadow = { s.s, s.t, s.p };
 
 	return tp;
@@ -156,15 +91,15 @@ TestPixel TestVertexShader2(TestVertex& vertex) {
 
 	Vec4 worldPos = translation * rotation * scale * vertex.position;
 	Vec4 thing = projection * view * worldPos;
-	Vec3 norm = rotation2.Truncate() * vertex.normal;
+	Vec3 norm = rotation.Truncate() * vertex.normal;
 
 	TestPixel tp(thing, norm);
 	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
 	tp.texel = vertex.texel * 25;
 
-	Mat4 mObject = translation2 * rotation2 * scale2;
+	Mat4 mObject = translation * rotation * scale;
 
-	Vec4 s = mViewport * orthographic * lightView * mObject * vertex.position;
+	Vec4 s = dl.WorldToViewportTransform(mObject * vertex.position);
 	tp.shadow = { s.s, s.t, s.p };
 
 	return tp;
@@ -172,13 +107,8 @@ TestPixel TestVertexShader2(TestVertex& vertex) {
 }
 
 Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampler2d) {
-	
-	float dot = -(Mat3::GetRotation(lightRot.r, lightRot.g, lightRot.b) * Vec3(0, 0, -1)) * pixel.normal.Normalized();
-	if (dot < 0)
-		dot = 0;
-	
-	//if (pixel.shadow.s >= 0 && pixel.shadow.s < 1 && pixel.shadow.t >= 0 && pixel.shadow.t < 1)
-	int x = pixel.shadow.s * shadowMap.GetWidth();
+
+	/*int x = pixel.shadow.s * shadowMap.GetWidth();
 	int y = pixel.shadow.t * shadowMap.GetHeight();
 	float fracInShadow = 0;
 	for (int i = x - 1; i < x + 1; ++i) {
@@ -194,18 +124,22 @@ Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampl
 			}
 
 		}
-	}
+	}*/
 	
 	//else {
 		//return { 1, 0, 0, 1 };
+
+	float fracInShadow = 0;
+	float compDepth = dl.SampleShadowMap(pixel.shadow.s, pixel.shadow.t);
+	if (pixel.shadow.p > compDepth + 0.01)
+		fracInShadow = 1;
 	
 
-	Vec4 col = { dot, dot, dot, 1 };
+	Vec3 col = dl.GetColorAt(pixel.normal.Normalized());
 
 	col *= (1 - fracInShadow * 0.5);
 
-
-	return col;
+	return { col.r, col.g, col.b, 1 };
 	
 	//Vec3 reflect = toCam.Reflect(pixel.normal);
 
@@ -246,7 +180,7 @@ SpherePixel SphereVertexShader(SphereVertex& v) {
 	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
 
 	Mat4 mObject = translation * rotation * scale;
-	Vec4 s = mViewport * orthographic * lightView * mObject * v.position;
+	Vec4 s = dl.WorldToViewportTransform(mObject * v.position);
 
 	tp.shadow = { s.s, s.t, s.p };
 
@@ -260,10 +194,6 @@ Vec4 SpherePixelShader(SpherePixel& sp, const Renderer::Sampler<SpherePixel>& sa
 		dot = 0;
 
 	float compDepth = 1e99;
-	//if (sp.shadow.s >= 0 && sp.shadow.s < 1 && sp.shadow.t >= 0 && sp.shadow.t < 1)
-		compDepth = shadowMap.GetPixel(sp.shadow.s * (shadowMap.GetWidth()), (sp.shadow.t * shadowMap.GetHeight()));
-	//else
-		//return { 1, 0, 0, 1 };
 	
 	Vec4 col = { dot, dot, dot, 1 };
 
@@ -283,7 +213,7 @@ Vec4 SpherePixelShader(SpherePixel& sp, const Renderer::Sampler<SpherePixel>& sa
 TestPixel ShadowVertexShader(TestVertex& v) {
 
 	Mat4 mObject = translation * rotation * scale;
-	Vec4 pos = orthographic * lightView * mObject * v.position;
+	Vec4 pos = dl.WorldToShadowTransform(mObject * v.position);
 	
 	return {pos , {0, 0, 0} };
 
@@ -315,11 +245,11 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
 
 	if (keyboard[SDL_SCANCODE_Q]) {
-		//rotation2 = rotation2 * Mat4::GetRotation(0.01, 0, 0);
+		rotation = rotation * Mat4::GetRotation(0, 0.1, 0);
 		lightRot.r += deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_E]) {
-		//rotation2 = rotation2 * Mat4::GetRotation(-0.01, 0, 0);
+		rotation = rotation * Mat4::GetRotation(0, -0.1, 0);
 		lightRot.r -= deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_W]) {
@@ -375,30 +305,15 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	view = (Mat4::Get3DTranslation(cameraPos.x, cameraPos.y, cameraPos.z) * Mat4::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z)).GetInverse();
 
-	lightView = Mat4::GetRotation(lightRot.x, lightRot.y, lightRot.z).GetInverse();
-
 	Mat4 camToWorld = view.GetInverse();
-	Frustum f = GetFrustumBoundingBox(projFrustum, lightView, camToWorld);
-
-	orthographic = Mat4::GetOrthographicProjection(f.near, f.far, f.left, f.right, f.top, f.bottom);
-
-	//renderer.SetFlags(RF_WIREFRAME);
-	//renderer.ClearFlags(RF_BACKFACE_CULL);
-
-	//renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader, TestPixelShader);
-	renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, ShadowVertexShader, ShadowPixelShader);
 	
-	//renderer.DrawElementArray<SphereVertex, SpherePixel>(numI, indices, sv, ShadowVertexShader, ShadowPixelShader);
-
-	shadowMap = renderer.GetDepthBuffer();
-	//shadowMap.SaveToFile("images/shadowmap.bmp");
-	//exit(0);
-	renderer.ClearDepthBuffer();
-
-	//renderer.DrawElementArray<SphereVertex, SpherePixel>(numI, indices, sv, SphereVertexShader, SpherePixelShader);
+	dl.UpdateShadowBox(projFrustum, camToWorld);
+	dl.DrawToShadowMap<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, ShadowVertexShader, ShadowPixelShader);
+	
 	renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader2, TestPixelShader);
 	renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
-	//cb.Render(renderer, view, projection);
+
+	dl.ClearShadowMap();
 
 	SDL_Event event = {};
 	while (SDL_PollEvent(&event)) {
@@ -488,18 +403,17 @@ int main(int argc, char* argv[]) {
 	// 2560, 1440
 	Window window("My Window", 20, 20, 750, 750, 0);
 
-	projection = Mat4::GetPerspectiveProjection(1, 100, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
+	projection = Mat4::GetPerspectiveProjection(1, 75, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
 	projFrustum.near = 1;
-	projFrustum.far = 100;
+	projFrustum.far = 75;
 	projFrustum.left = -1;
 	projFrustum.right = 1;
 	projFrustum.top = (float)window.GetHeight() / window.GetWidth();
 	projFrustum.bottom = -(float)window.GetHeight() / window.GetWidth();
 
-	Shapes::MakeSphere(20, 2, &numI, &numV, &indices, &vertices);
-	sv = new SphereVertex[numV];
-	for (int i = 0; i < numV; ++i) {
-		sv[i].position = vertices[i];
+	sv = new SphereVertex[sphere.nVertices];
+	for (int i = 0; i < sphere.nVertices; ++i) {
+		sv[i].position = sphere.pVertices[i];
 	}
 
 	StartDoubleBufferedInstance(window, RenderLogic, PostProcess,  RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
@@ -519,8 +433,6 @@ int main(int argc, char* argv[]) {
 	//window.DrawSurface(s);
 	//window.BlockUntilQuit();
 
-	delete[] indices;
-	delete[] vertices;
 	delete[] sv;
 
 	delete[] boxIndices;

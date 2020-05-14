@@ -8,6 +8,12 @@ Renderer::Renderer(Surface& renderTarget) : pRenderTarget(&renderTarget), depthB
 
 }
 
+Renderer::Renderer(int width, int height) : pRenderTarget(nullptr), depthBuffer(width, height) {
+
+	ClearDepthBuffer();
+
+}
+
 Renderer::~Renderer() {
 	
 }
@@ -117,8 +123,8 @@ void Renderer::DepthBuffer::SaveToFile(const std::string& filename) const {
 	unsigned int aMask = 0xff000000;
 
 	for (int i = 0; i < width * height; ++i) {
-		normalized[i] = (unsigned int)std::fminf(255.0f, pDepths[i] * 255);
 
+		normalized[i] = (unsigned int)std::fminf(255.0f, pDepths[i] * 255);
 		normalized[i] |= (normalized[i] << 16) | (normalized[i] << 8) | aMask;
 	}
 
@@ -127,7 +133,6 @@ void Renderer::DepthBuffer::SaveToFile(const std::string& filename) const {
 	SDL_FreeSurface(surface);
 
 	delete[] normalized;
-
 
 }
 

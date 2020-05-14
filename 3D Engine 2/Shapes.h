@@ -1,8 +1,44 @@
 #pragma once
 #include "Vec4.h"
 
-namespace Shapes {
+struct Box {
 
-	void MakeSphere(int vertsDown, float radius, int* numTriangles, int* numPositions, int** indices, Vec4** vertices);
+	float left;
+	float right;
+	float bottom;
+	float top;
+	float front;
+	float back;
 
-}
+};
+
+struct Frustum {
+
+	float near;
+	float far;
+
+	float left;
+	float right;
+
+	float bottom;
+	float top;
+
+
+};
+
+struct Sphere {
+
+	float radius;
+
+	int nTriangles;
+	int nVertices;
+
+	int* pIndices = nullptr;
+	Vec4* pVertices = nullptr;
+
+	Sphere(int resolution, float radius);
+	~Sphere();
+
+};
+
+

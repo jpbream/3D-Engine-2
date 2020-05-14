@@ -8,14 +8,6 @@
 #include <thread>
 #include <vector>
 
-#ifndef NEAR
-#define NEAR 1.0f
-#endif
-
-#ifndef FAR
-#define FAR 100.0f
-#endif
-
 #ifndef _DEBUG
 #define THREADS (std::thread::hardware_concurrency() - 2) / 2
 #else
@@ -421,6 +413,12 @@ public:
 		}
 	};
 
+	template <class Vertex, class Pixel>
+	using VS_TYPE = Pixel(*)(Vertex& v);
+
+	template <class Pixel>
+	using PS_TYPE = Vec4(*)(Pixel & sd, const Sampler<Pixel> & sampler);
+
 private:
 
 	// if a draw call is made where the 
@@ -438,12 +436,6 @@ private:
 	// creating many of them kills performance
 	// they are good for cube maps
 	bool usingThreads = false;
-
-	template <class Vertex, class Pixel>
-	using VS_TYPE = Pixel(*)(Vertex& v);
-
-	template <class Pixel>
-	using PS_TYPE = Vec4(*)(Pixel & sd, const Sampler<Pixel> & sampler);
 
 	template <class Vertex, class Pixel>
 	class NO_CLASS {
@@ -667,17 +659,20 @@ private:
 		// all pixel values must be rounded down (int) to prevent fill gaps
 		// im not sure why it works but it does
 
-		Vec2 v1Screen((float)(int)((float)(p1.GetPos().x + 1.0f) * ((float)pRenderTarget->GetWidth() - 0.1f) / 2.0f),
-			(float)(int)((-(float)p1.GetPos().y + 1.0f) * (float)((pRenderTarget->GetHeight() - 0.1f) / 2)));
+		// use depth buffer dimensions because they will always be the same as the render targets dimensions
+		// if it is not null ptr
 
-		Vec2 v2Screen((float)(int)(((float)p2.GetPos().x + 1.0f) * ((float)pRenderTarget->GetWidth() - 0.1f) / 2.0f),
-			(float)(int)((-(float)p2.GetPos().y + 1.0f) * (float)((pRenderTarget->GetHeight() - 0.1f) / 2)));
+		Vec2 v1Screen((float)(int)((float)(p1.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.1f) / 2.0f),
+			(float)(int)((-(float)p1.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.1f) / 2)));
 
-		Vec2 v3Screen((float)(int)(((float)p3.GetPos().x + 1.0f) * ((float)pRenderTarget->GetWidth() - 0.1f) / 2.0f),
-			(float)(int)((-(float)p3.GetPos().y + 1.0f) * (float)((pRenderTarget->GetHeight() - 0.1f) / 2)));
+		Vec2 v2Screen((float)(int)(((float)p2.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.1f) / 2.0f),
+			(float)(int)((-(float)p2.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.1f) / 2)));
 
-		// if wireframe mode is enabled
-		if (flags & RF_WIREFRAME) {
+		Vec2 v3Screen((float)(int)(((float)p3.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.1f) / 2.0f),
+			(float)(int)((-(float)p3.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.1f) / 2)));
+
+		// if wireframe mode is enabled, and there is a valid render target
+		if (flags & RF_WIREFRAME && pRenderTarget) {
 
 			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v2Screen.x, (int)v2Screen.y, 0xffffffff);
 			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v3Screen.x, (int)v3Screen.y, 0xffffffff);
@@ -759,8 +754,8 @@ private:
 			}
 		}
 
-		// if outlines mode is enabled
-		if (flags & RF_OUTLINES) {
+		// if outlines mode is enabled and there is a valid render target
+		if (flags & RF_OUTLINES && pRenderTarget) {
 
 			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v2Screen.x, (int)v2Screen.y, 0xffffffff);
 			pRenderTarget->DrawLine((int)v1Screen.x, (int)v1Screen.y, (int)v3Screen.x, (int)v3Screen.y, 0xffffffff);
@@ -883,15 +878,12 @@ private:
 				// undo the perspective correct interpolation
 				FlipPerspective(acrossTravelerPixel);
 
-				// get the depth and normalize from 0 to 1, use w for depth
-				float normalizedDepth = flags & RF_LINEAR_ZBUF ?
-					(acrossTravelerPixel.GetPos().w - NEAR) / (FAR - NEAR)
-					:
-					(1 / acrossTravelerPixel.GetPos().w - 1 / NEAR) / (1 / FAR - 1 / NEAR);
-				normalizedDepth = (acrossTravelerPixel.GetPos().z + 1) / 2;
+				// get the depth and normalize from 0 to 1
+				float normalizedDepth = (acrossTravelerPixel.GetPos().z + 1) / 2;
 
 				// test the pixel agains the z buffer
-				if (TestAndSetPixel(x, y, normalizedDepth)) {
+				// if pRenderTarget is null, this is a depth buffer only renderer
+				if (TestAndSetPixel(x, y, normalizedDepth) && pRenderTarget) {
 
 					// run the pixel shader
 					Vec4 pixelColor = RunPixelShader<Pixel, Mesh, PSPtr>(PixelShader, acrossTravelerPixel, sampler2d);
@@ -935,9 +927,6 @@ private:
 
 	template <class Vertex, class Pixel, class Mesh, typename VSPtr, typename PSPtr>
 	void _DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VSPtr VertexShader, PSPtr PixelShader) {
-
-		if (pRenderTarget == nullptr)
-			return;
 
 		std::vector<std::thread> threads;
 		std::unordered_map<int, Pixel> processedVertices;
@@ -1001,6 +990,7 @@ private:
 public:
 
 	Renderer(Surface& renderTarget);
+	Renderer(int width, int height);
 	~Renderer();
 
 	void SetRenderTarget(Surface& renderTarget);

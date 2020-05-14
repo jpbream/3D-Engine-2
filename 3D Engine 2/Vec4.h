@@ -1,6 +1,8 @@
 #pragma once
 #include <iostream>
 
+class Vec3;
+
 class Vec4
 {
 
@@ -57,6 +59,10 @@ public:
 
 	Vec4 Reflect(const Vec4& normal) const;
 	Vec4 Refract(const Vec4& normal, float n1, float n2) const;
+
+	static Vec4 Modulate(const Vec4& v1, const Vec4& v2);
+
+	Vec3 Vec3() const;
 
 };
 

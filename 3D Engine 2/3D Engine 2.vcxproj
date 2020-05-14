@@ -151,6 +151,7 @@
     <ClCompile Include="Cubemap.cpp" />
     <ClCompile Include="Entry.cpp" />
     <ClCompile Include="Instance.cpp" />
+    <ClCompile Include="Light.cpp" />
     <ClCompile Include="Manager.cpp" />
     <ClCompile Include="Mat2.cpp" />
     <ClCompile Include="Mat3.cpp" />
@@ -167,8 +168,8 @@
   <ItemGroup>
     <ClInclude Include="Cubemap.h" />
     <ClInclude Include="Engine.h" />
-    <ClInclude Include="Frustum.h" />
     <ClInclude Include="Instance.h" />
+    <ClInclude Include="Light.h" />
     <ClInclude Include="Manager.h" />
     <ClInclude Include="Mat2.h" />
     <ClInclude Include="Mat3.h" />

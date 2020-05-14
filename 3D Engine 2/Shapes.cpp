@@ -3,7 +3,9 @@
 
 #define PI 3.14159265358979323846
 
-void Shapes::MakeSphere(int vertsDown, float radius, int* numTriangles, int* numVertices, int** indices, Vec4** vertices) {
+static void MakeSphere(int vertsDown, float radius, int* numTriangles, int* numVertices, int** indices, Vec4** vertices) {
+
+	// helper function for the sphere constructor
 
 	// the number of vertices around the sphere
 	int vertsAround = vertsDown * 2 + 2;
@@ -141,3 +143,21 @@ void Shapes::MakeSphere(int vertsDown, float radius, int* numTriangles, int* num
 	(*indices)[count++] = *numVertices - 1;
 
 }
+
+Sphere::Sphere(int resolution, float radius) : radius(radius) {
+
+	// call make sphere instead of having all that code in this constructor
+	MakeSphere(resolution, radius, &nTriangles, &nVertices, &pIndices, &pVertices);
+
+}
+
+Sphere::~Sphere() {
+
+	if (pIndices != nullptr)
+		delete[] pIndices;
+
+	if (pVertices != nullptr)
+		delete[] pVertices;
+
+}
+
