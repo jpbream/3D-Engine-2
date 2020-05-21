@@ -63,6 +63,7 @@ public:
 	static Vec4 Modulate(const Vec4& v1, const Vec4& v2);
 
 	Vec3 Vec3() const;
+	void Clamp();
 
 };
 

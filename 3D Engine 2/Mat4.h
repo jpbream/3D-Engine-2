@@ -20,7 +20,8 @@ private:
 
 public:
 
-	static Mat4 Identity;
+	static const Mat4 Identity;
+	static const Mat4 Viewport;
 
 	Mat4();
 	Mat4(const Vec4& c1, const Vec4& c2, const Vec4& c3, const Vec4& c4);

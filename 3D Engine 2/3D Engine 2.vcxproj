@@ -148,6 +148,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Cow.cpp" />
     <ClCompile Include="Cubemap.cpp" />
     <ClCompile Include="Entry.cpp" />
     <ClCompile Include="Instance.cpp" />
@@ -166,6 +167,7 @@
     <ClCompile Include="Window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Cow.h" />
     <ClInclude Include="Cubemap.h" />
     <ClInclude Include="Engine.h" />
     <ClInclude Include="Instance.h" />

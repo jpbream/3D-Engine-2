@@ -4,7 +4,19 @@
 #include <math.h>
 #include <immintrin.h>
 
-Mat4 Mat4::Identity({ 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, {0, 0, 0, 1});
+const Mat4 Mat4::Identity{ 
+	{ 1, 0, 0, 0 }, 
+	{ 0, 1, 0, 0 }, 
+	{ 0, 0, 1, 0 }, 
+	{0, 0, 0, 1} 
+};
+
+const Mat4 Mat4::Viewport{
+	{.5, 0, 0, 0},
+	{0, -.5, 0, 0},
+	{0, 0, .5, 0},
+	{.5, .5, .5, 1}
+};
 
 Mat4::Mat4() {
 	cols[0] = { 1, 0, 0, 0 };

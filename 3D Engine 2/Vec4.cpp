@@ -142,6 +142,27 @@ Vec3 Vec4::Vec3() const {
 	return { x, y, z };
 }
 
+void Vec4::Clamp()
+{
+	if ( x < 0 )
+		x = 0;
+	if ( y < 0 )
+		y = 0;
+	if ( z < 0 )
+		z = 0;
+	if ( w < 0 )
+		w = 0;
+
+	if ( x > 1 )
+		x = 1;
+	if ( y > 1 )
+		y = 1;
+	if ( z > 1 )
+		z = 1;
+	if ( w > 1 )
+		w = 1;
+}
+
 std::ostream& operator<<(std::ostream& os, const Vec4& v) {
 
 	os << "[ " << v.x << " " << v.y << " " << v.z << " " << v.w << " ]";

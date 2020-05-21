@@ -4,21 +4,15 @@
 #include <iostream>
 
 #define OFFSET 10
-#define FRUSTUM_SCALE 1
-
+#define RANGE 25
 #define LARGE_DEPTH 1e30f
 
-static Mat4 viewportMatrix = { 
-	{.5, 0, 0, 0}, 
-	{0, -.5, 0, 0}, 
-	{0, 0, .5, 0}, 
-	{.5, .5, .5, 1} 
-};
+#define SHADOW_DEPTH_OFFSET 0.007
 
-static Box CalculateFrustumBoundingBox(Frustum frustum, const Mat4& camToWorldMatrix, const Mat4& lightViewMatrix) {
-	
-	// this actually works
-	frustum.far /= 3;
+static Box CalculateFrustumBoundingBox(const Frustum& frustum, const Mat4& camToWorldMatrix, const Mat4& lightViewMatrix) {
+
+	// in this function we fake the far plane as being at RANGE to artificially limit the
+	// shadow casting range along the z axis, since the far plane is usually very far away
 
 	// there are 8 corners on the view frustum
 	Vec4 frustumPoints[8];
@@ -32,18 +26,16 @@ static Box CalculateFrustumBoundingBox(Frustum frustum, const Mat4& camToWorldMa
 
 	// what to multiply left/right top/bottom by to get the x y values for the points on the far plane
 	// derived using similar triangles
-	float farFactor = (frustum.near + frustum.far) / frustum.near;
+	float farFactor = (frustum.near + RANGE) / frustum.near;
 
-	frustumPoints[4] = { frustum.left * farFactor, frustum.bottom * farFactor, -frustum.far, 1 };
-	frustumPoints[5] = { frustum.right * farFactor, frustum.bottom * farFactor, -frustum.far, 1 };
-	frustumPoints[6] = { frustum.right * farFactor, frustum.top * farFactor, -frustum.far, 1 };
-	frustumPoints[7] = { frustum.left * farFactor, frustum.top * farFactor, -frustum.far, 1 };
+	frustumPoints[4] = { frustum.left * farFactor, frustum.bottom * farFactor, -RANGE, 1 };
+	frustumPoints[5] = { frustum.right * farFactor, frustum.bottom * farFactor, -RANGE, 1 };
+	frustumPoints[6] = { frustum.right * farFactor, frustum.top * farFactor, -RANGE, 1 };
+	frustumPoints[7] = { frustum.left * farFactor, frustum.top * farFactor, -RANGE, 1 };
 	
 	// convert to light space
-	for (int i = 0; i < 8; ++i) {
-
+	for (int i = 0; i < 8; ++i)
 		frustumPoints[i] = lightViewMatrix * camToWorldMatrix * frustumPoints[i];
-	}
 
 	// hold the max x y and z values of the 8 points
 	float maxX = frustumPoints[0].x; float minX = frustumPoints[0].x;
@@ -77,12 +69,17 @@ static Box CalculateFrustumBoundingBox(Frustum frustum, const Mat4& camToWorldMa
 	f.back = -minZ;
 	f.left = minX;
 	f.right = maxX;
+
+	// if the y's are not reversed, the shadow map is drawn to a file upside down for some reason
+	// it makes no visual difference in the program though
 	f.top = minY;
 	f.bottom = maxY;
 
 	return f;
 
 }
+
+/////// DIRECTIONAL LIGHT /////////
 
 DirectionalLight::DirectionalLight(const Vec3& color, const Vec3& rotation)
 	:
@@ -108,13 +105,12 @@ const Vec3& DirectionalLight::GetRotation() const
 	return rotation;
 }
 
-Vec3 DirectionalLight::GetColorAt(const Vec3& surfaceNormal) const
+float DirectionalLight::FacingFactor(const Vec3& surfaceNormal) const
 {
-	float dot = -surfaceNormal * direction;
-	if (dot < 0)
-		dot = 0;
-
-	return color * dot;
+	float ff = -direction * surfaceNormal;
+	if ( ff < 0 )
+		return 0;
+	return ff;
 }
 
 void DirectionalLight::SetColor(const Vec3& color)
@@ -134,18 +130,17 @@ void DirectionalLight::UpdateShadowBox(const Frustum& viewFrustum, const Mat4& c
 {
 
 	// calculate the bounding box for the passed in view frustum
-	//Vec4 worldCenter;
 	Box boundingBox = CalculateFrustumBoundingBox(viewFrustum, camToWorldMatrix, viewMatrix);
 
 	// use this box to set up the orthographic projection
 	// FRUSTUM SCALE will scale the box by a scale factor
 	orthographicProjection = Mat4::GetOrthographicProjection(
-		boundingBox.front * FRUSTUM_SCALE,
-		boundingBox.back * FRUSTUM_SCALE,
-		boundingBox.left * FRUSTUM_SCALE,
-		boundingBox.right * FRUSTUM_SCALE,
-		boundingBox.top * FRUSTUM_SCALE,
-		boundingBox.bottom * FRUSTUM_SCALE
+		boundingBox.front,
+		boundingBox.back,
+		boundingBox.left,
+		boundingBox.right,
+		boundingBox.top,
+		boundingBox.bottom
 	);
 }
 
@@ -170,18 +165,240 @@ float DirectionalLight::SampleShadowMap(float s, float t) const
 	}
 }
 
+float DirectionalLight::MultiSampleShadowMap(const Vec3& shadowCoord, int sampleWidth) const
+{
+	// if the light is not using a shadow map, indicate that no pixels are in shadow
+	if ( GetShadowMapWidth() == 0 || GetShadowMapHeight() == 0 )
+		return 0.0f;
+
+	float xoff = 1.0f / GetShadowMapWidth();
+	float yoff = 1.0f / GetShadowMapHeight();
+
+	float fracInShadow = 0;
+
+	for ( int i = 0; i < sampleWidth; i++ ) {
+		for ( int j = 0; j < sampleWidth; j++ ) {
+
+			float s = shadowCoord.s + (sampleWidth / 2.0f) * xoff - i * xoff;
+			float t = shadowCoord.t + (sampleWidth / 2.0f) * yoff - j * yoff;
+
+			float sample = SampleShadowMap(s, t);
+
+			if ( shadowCoord.p > sample + SHADOW_DEPTH_OFFSET )
+				fracInShadow += 1.0f / (sampleWidth * sampleWidth);
+
+		}
+	}
+
+	return fracInShadow;
+}
+
+int DirectionalLight::GetShadowMapWidth() const {
+	return shadowMapRenderer.GetDepthBuffer().GetWidth();
+}
+
+int DirectionalLight::GetShadowMapHeight() const {
+	return shadowMapRenderer.GetDepthBuffer().GetHeight();
+}
+
 void DirectionalLight::ClearShadowMap()
 {
 	shadowMapRenderer.ClearDepthBuffer();
 
 }
 
-Vec4 DirectionalLight::WorldToShadowTransform(const Vec4& worldSpaceCoord) const
+Mat4 DirectionalLight::WorldToShadowMatrix() const
 {
-	return orthographicProjection * viewMatrix * worldSpaceCoord;
+	return orthographicProjection * viewMatrix;
 }
 
-Vec4 DirectionalLight::WorldToViewportTransform(const Vec4& worldSpaceCoord) const 
+
+
+/////// SPOT LIGHT /////////
+
+SpotLight::SpotLight(const Vec3& color, const Vec3& position, const Vec3& rotation, float constant, float linear, float quadratic, float exponent)
+
+	: color(color), shadowMapRenderer(0, 0), constant(constant), linear(linear), quadratic(quadratic), exponent(exponent)
+
 {
-	return viewportMatrix * orthographicProjection * viewMatrix * worldSpaceCoord;
+	SetPosition(position);
+	SetRotation(rotation);
+}
+
+SpotLight::SpotLight(const Vec3& color, const Vec3& position, const Vec3& rotation, float constant, float linear, float quadratic, float exponent, int shadowMapWidth, int shadowMapHeight)
+
+	: color(color), shadowMapRenderer(shadowMapWidth, shadowMapHeight), constant(constant), linear(linear), quadratic(quadratic), exponent(exponent)
+{
+	SetPosition(position);
+	SetRotation(rotation);
+}
+
+const Vec3& SpotLight::GetColor() const
+{
+	return color;
+}
+
+const Vec3& SpotLight::GetPosition() const
+{
+	return position;
+}
+
+const Vec3& SpotLight::GetRotation() const
+{
+	return rotation;
+}
+
+Vec3 SpotLight::GetColorAt(const Vec3& position) const
+{
+	
+	// distance from the point to the light
+	float distance = (this->position - position).Length();
+
+	// intensity based on the attenuation constants
+	float intensity = 1.0f / (constant + linear * distance + quadratic * distance * distance);
+
+	// how much the point to light vector lines up with the spot direction
+	// raised to the concentration exponent
+	float directionFactor = -direction * (this->position - position).Normalized();
+	if ( directionFactor <= 0 )
+		return { 0, 0, 0 };
+
+	directionFactor = powf(directionFactor, exponent);
+
+	return color * directionFactor * intensity;
+
+}
+
+float SpotLight::FacingFactor(const Vec3& surfaceNormal) const
+{
+	float ff = -direction * surfaceNormal;
+	if ( ff < 0 )
+		return 0;
+	return ff;
+}
+
+void SpotLight::SetColor(const Vec3& color)
+{
+	this->color = color;
+}
+
+void SpotLight::SetPosition(const Vec3& position)
+{
+	this->position = position;
+
+	viewMatrix = (Mat4::Get3DTranslation(position.x, position.y, position.z) * Mat4::GetRotation(rotation.x, rotation.y, rotation.z)).GetInverse();
+}
+
+void SpotLight::SetRotation(const Vec3& rotation)
+{
+	this->rotation = rotation;
+
+	direction = Mat3::GetRotation(rotation.x, rotation.y, rotation.z) * Vec3(0, 0, -1);
+	viewMatrix = (Mat4::Get3DTranslation(position.x, position.y, position.z) * Mat4::GetRotation(rotation.x, rotation.y, rotation.z)).GetInverse();
+}
+
+void SpotLight::SetConstants(float constant, float linear, float quadratic)
+{
+	this->constant = constant;
+	this->linear = linear;
+	this->quadratic = quadratic;
+}
+
+void SpotLight::SetExponent(float exponent)
+{
+	this->exponent = exponent;
+}
+
+void SpotLight::UpdateShadowBox(const Frustum& viewFrustum, const Mat4& camToWorldMatrix)
+{
+	// calculate the bounding box for the passed in view frustum
+	Box boundingBox = CalculateFrustumBoundingBox(viewFrustum, camToWorldMatrix, viewMatrix);
+
+	// only care about the back of the bounding box
+	/*perspectiveProjection = Mat4::GetPerspectiveProjection(
+		1.0f,
+		-boundingBox.back,
+		-1.0f,
+		1.0f,
+		(float)GetShadowMapHeight() / GetShadowMapWidth(),
+		-(float)GetShadowMapHeight() / GetShadowMapWidth()
+	);*/
+
+	perspectiveProjection = Mat4::GetOrthographicProjection(
+		boundingBox.front,
+		boundingBox.back,
+		boundingBox.left,
+		boundingBox.right,
+		boundingBox.top,
+		boundingBox.bottom
+	);
+
+}
+
+float SpotLight::SampleShadowMap(float s, float t) const
+{
+	if ( s >= 0 && s < 1 && t >= 0 && t < 1 ) {
+
+		return shadowMapRenderer.GetDepthBuffer().GetPixel(
+
+			s * shadowMapRenderer.GetDepthBuffer().GetWidth(),
+			t * shadowMapRenderer.GetDepthBuffer().GetHeight()
+
+		);
+
+	}
+	else {
+
+		// texel is out of range of shadow frustum, return value that will
+		// not be shadowed
+		return LARGE_DEPTH;
+	}
+}
+
+float SpotLight::MultiSampleShadowMap(const Vec3& shadowCoord, int sampleWidth) const
+{
+	// if the light is not using a shadow map, indicate that no pixels are in shadow
+	if ( GetShadowMapWidth() == 0 || GetShadowMapHeight() == 0 )
+		return 0.0f;
+
+	float xoff = 1.0f / GetShadowMapWidth();
+	float yoff = 1.0f / GetShadowMapHeight();
+
+	float fracInShadow = 0;
+
+	for ( int i = 0; i < sampleWidth; i++ ) {
+		for ( int j = 0; j < sampleWidth; j++ ) {
+
+			float s = shadowCoord.s + (sampleWidth / 2.0f) * xoff - i * xoff;
+			float t = shadowCoord.t + (sampleWidth / 2.0f) * yoff - j * yoff;
+
+			float sample = SampleShadowMap(s, t);
+
+			if ( shadowCoord.p > sample + SHADOW_DEPTH_OFFSET )
+				fracInShadow += 1.0f / (sampleWidth * sampleWidth);
+
+		}
+	}
+
+	return fracInShadow;
+}
+
+int SpotLight::GetShadowMapWidth() const
+{
+	return shadowMapRenderer.GetDepthBuffer().GetWidth();
+}
+
+int SpotLight::GetShadowMapHeight() const
+{
+	return shadowMapRenderer.GetDepthBuffer().GetHeight();
+}
+
+void SpotLight::ClearShadowMap()
+{
+	shadowMapRenderer.ClearDepthBuffer();
+}
+
+Mat4 SpotLight::WorldToShadowMatrix() const
+{
+	return perspectiveProjection * viewMatrix;
 }

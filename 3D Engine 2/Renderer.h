@@ -421,11 +421,6 @@ public:
 
 private:
 
-	// if a draw call is made where the 
-	// pixel and vertex shaders are member functions
-	// this will store the object that made the call
-	void* boundObject = nullptr;
-
 	Surface* pRenderTarget;
 
 	DepthBuffer depthBuffer;
@@ -437,16 +432,7 @@ private:
 	// they are good for cube maps
 	bool usingThreads = false;
 
-	template <class Vertex, class Pixel>
-	class NO_CLASS {
-
-	public:
-		virtual Pixel VertexShader(Vertex& v) = 0;
-		virtual Vec4 PixelShader(Pixel& p, const Sampler<Pixel>& sampler) = 0;
-
-	};
-
-	template <class Pixel, class Mesh, typename PSPtr>
+	template <class Pixel, typename PSPtr>
 	void ClipAndDrawTriangle(Pixel& p1, Pixel& p2, Pixel& p3, PSPtr PixelShader, int iteration) {
 
 		int memberVariableOffset = 0;
@@ -494,7 +480,7 @@ private:
 			break;
 
 		default:
-			DrawTriangle<Pixel, Mesh, PSPtr>(p1, p2, p3, PixelShader);
+			DrawTriangle<Pixel, PSPtr>(p1, p2, p3, PixelShader);
 			return;
 		}
 
@@ -518,19 +504,19 @@ private:
 				else {
 
 					//p1 outside, p2 outside, p3 inside
-					Clip2Outside<Pixel, Mesh, PSPtr>(p1, p2, p3, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
+					Clip2Outside<Pixel, PSPtr>(p1, p2, p3, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 			}
 			else {
 				if (p3Outside) {
 
 					//p1 outside, p2 inside, p3 outside
-					Clip2Outside<Pixel, Mesh, PSPtr>(p3, p1, p2, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
+					Clip2Outside<Pixel, PSPtr>(p3, p1, p2, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 				else {
 		
 					//p1 outside, p2 inside, p3 inside
-					Clip1Outside<Pixel, Mesh, PSPtr>(p1, p2, p3, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
+					Clip1Outside<Pixel, PSPtr>(p1, p2, p3, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 			}
 		}
@@ -539,31 +525,31 @@ private:
 				if (p3Outside) {
 
 					//p1 inside, p2 outside, p3 outside
-					Clip2Outside<Pixel, Mesh, PSPtr>(p2, p3, p1, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
+					Clip2Outside<Pixel, PSPtr>(p2, p3, p1, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 				else {
 
 					//p1 inside, p2 outside, p3 inside
-					Clip1Outside<Pixel, Mesh, PSPtr>(p2, p3, p1, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
+					Clip1Outside<Pixel, PSPtr>(p2, p3, p1, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 			}
 			else {
 				if (p3Outside) {
 
 					//p1 inside, p2 inside, p3 outside
-					Clip1Outside<Pixel, Mesh, PSPtr>(p3, p1, p2, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
+					Clip1Outside<Pixel, PSPtr>(p3, p1, p2, memberVariableOffset, signOfPlane, iteration + 1, PixelShader);
 				}
 				else {
 
 					// clip against next plane
-					ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(p1, p2, p3, PixelShader, iteration + 1);
+					ClipAndDrawTriangle<Pixel, PSPtr>(p1, p2, p3, PixelShader, iteration + 1);
 				}
 			}
 		}
 
 	}
 
-	template <class Pixel, class Mesh, typename PSPtr>
+	template <class Pixel, typename PSPtr>
 	void Clip1Outside(Pixel& outside, Pixel& inside1, Pixel& inside2, int memberVariableOffset, int signOfPlane, int nextIteration, PSPtr PixelShader) {
 
 		// the triangle will be drawn with the order, outside, inside1, inside2
@@ -580,12 +566,12 @@ private:
 		Pixel n1 = Lerp(outside, inside1, alpha1);
 		Pixel n2 = Lerp(outside, inside2, alpha2);
 		
-		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, inside1, inside2, PixelShader, nextIteration);
-		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, inside2, n2, PixelShader, nextIteration);
+		ClipAndDrawTriangle<Pixel, PSPtr>(n1, inside1, inside2, PixelShader, nextIteration);
+		ClipAndDrawTriangle<Pixel, PSPtr>(n1, inside2, n2, PixelShader, nextIteration);
 
 	}
 
-	template <class Pixel, class Mesh, typename PSPtr>
+	template <class Pixel, typename PSPtr>
 	void Clip2Outside(Pixel& outside1, Pixel& outside2, Pixel& inside, int memberVariableOffset, int signOfPlane, int nextIteration, PSPtr PixelShader) {
 
 		// the triangle will be drawn with the order outside1, outside2, inside
@@ -602,7 +588,7 @@ private:
 		Pixel n1 = Lerp(outside1, inside, alpha1);
 		Pixel n2 = Lerp(outside2, inside, alpha2);
 		
-		ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(n1, n2, inside, PixelShader, nextIteration);
+		ClipAndDrawTriangle<Pixel, PSPtr>(n1, n2, inside, PixelShader, nextIteration);
 
 	}
 
@@ -625,7 +611,7 @@ private:
 
 	}
 
-	template <class Pixel, class Mesh, typename PSPtr>
+	template <class Pixel, typename PSPtr>
 	void DrawTriangle(Pixel p1, Pixel p2, Pixel p3, PSPtr PixelShader) {
 		
 		// w divide
@@ -728,14 +714,14 @@ private:
 			// cut is on the right
 			if (usingThreads) {
 
-				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
 				flatBottom.join();
 			}
 			else {
 
-				DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+				DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
 			}
 	
 		}
@@ -744,13 +730,13 @@ private:
 			// cut is on the left
 			if (usingThreads) {
 
-				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
 				flatBottom.join();
 			}
 			else {
-				DrawHalfTriangle<FLAT_BOTTOM, Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, Mesh, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+				DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
+				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
 			}
 		}
 
@@ -764,24 +750,7 @@ private:
 		}
 	}
 
-	template <class Pixel, class Mesh, typename PSPtr>
-	Vec4 RunPixelShader(PSPtr PixelShader, Pixel& args, const Sampler<Pixel>& sampler) {
-
-		if (boundObject == nullptr) {
-
-			return PixelShader(args, sampler);
-
-		}
-		else {
-
-			Mesh* mesh = (Mesh*)boundObject;
-			return mesh->PixelShader(args, sampler);
-
-		}
-
-	}
-
-	template <int TYPE, class Pixel, class Mesh, typename PSPtr>
+	template <int TYPE, class Pixel, typename PSPtr>
 	void DrawHalfTriangle(Pixel& leftPixel, Vec2& leftScreen, Pixel& otherPixel, Vec2& otherScreen, Pixel& rightPixel, Vec2& rightScreen, PSPtr PixelShader) {
 		
 		// incase an invalid triangle type gets passed in
@@ -886,7 +855,7 @@ private:
 				if (TestAndSetPixel(x, y, normalizedDepth) && pRenderTarget) {
 
 					// run the pixel shader
-					Vec4 pixelColor = RunPixelShader<Pixel, Mesh, PSPtr>(PixelShader, acrossTravelerPixel, sampler2d);
+					Vec4 pixelColor = PixelShader(acrossTravelerPixel, sampler2d);
 					pRenderTarget->PutPixel(x, y, pixelColor);
 
 				}
@@ -908,24 +877,7 @@ private:
 
 	bool TestAndSetPixel(int x, int y, float normalizedDepth);
 
-	template <class Vertex, class Pixel, class Mesh, typename VSPtr>
-	Pixel RunVertexShader(VSPtr VertexShader, Vertex& args) {
-
-		if (boundObject == nullptr) {
-
-			return VertexShader(args);
-
-		}
-		else {
-
-			Mesh* mesh = (Mesh*)boundObject;
-			return mesh->VertexShader(args);
-
-		}
-
-	}
-
-	template <class Vertex, class Pixel, class Mesh, typename VSPtr, typename PSPtr>
+	template <class Vertex, class Pixel, typename VSPtr, typename PSPtr>
 	void _DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VSPtr VertexShader, PSPtr PixelShader) {
 
 		std::vector<std::thread> threads;
@@ -944,13 +896,13 @@ private:
 
 			// run the vertex shaders or look up the vertex if it has already been run
 			if (!processedVertices.count(i1)) {
-				processedVertices.emplace(i1, RunVertexShader<Vertex, Pixel, Mesh, VSPtr>(VertexShader, vertices[i1]));
+				processedVertices.emplace(i1, VertexShader(vertices[i1]));
 			}
 			if (!processedVertices.count(i2)) {
-				processedVertices.emplace(i2, RunVertexShader<Vertex, Pixel, Mesh, VSPtr>(VertexShader, vertices[i2]));
+				processedVertices.emplace(i2, VertexShader(vertices[i2]));
 			}
 			if (!processedVertices.count(i3)) {
-				processedVertices.emplace(i3, RunVertexShader<Vertex, Pixel, Mesh, VSPtr>(VertexShader, vertices[i3]));
+				processedVertices.emplace(i3, VertexShader(vertices[i3]));
 			}
 
 			// clear out any threads that have already finished
@@ -970,11 +922,11 @@ private:
 			// if we have enough resources to draw this triangle in a new thread, do so
 			if (threads.size() < THREADS && usingThreads) {
 
-				threads.emplace_back(&Renderer::ClipAndDrawTriangle<Pixel, Mesh, PSPtr>, this, std::ref(processedVertices[i1]), std::ref(processedVertices[i2]), std::ref(processedVertices[i3]), PixelShader, 0);
+				threads.emplace_back(&Renderer::ClipAndDrawTriangle<Pixel, PSPtr>, this, std::ref(processedVertices[i1]), std::ref(processedVertices[i2]), std::ref(processedVertices[i3]), PixelShader, 0);
 
 			}
 			else {
-				ClipAndDrawTriangle<Pixel, Mesh, PSPtr>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
+				ClipAndDrawTriangle<Pixel, PSPtr>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
 			}
 
 
@@ -998,24 +950,8 @@ public:
 	template <class Vertex, class Pixel>
 	void DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VS_TYPE<Vertex, Pixel> VertexShader, PS_TYPE<Pixel> PixelShader) {
 
-		// used when vertex and pixel shader are not member functions
+		_DrawElementArray<Vertex, Pixel, VS_TYPE<Vertex, Pixel>, PS_TYPE<Pixel>>(numIndexGroups, indices, vertices, VertexShader, PixelShader);
 
-		boundObject = nullptr;
-
-		_DrawElementArray<Vertex, Pixel, NO_CLASS<Vertex, Pixel>, VS_TYPE<Vertex, Pixel>, PS_TYPE<Pixel>>(numIndexGroups, indices, vertices, VertexShader, PixelShader);
-
-	}
-
-	template <class Vertex, class Pixel, class Mesh>
-	void DrawElementArray(Mesh* mesh, int numIndexGroups, int* indices, Vertex* vertices) {
-
-		// used when vertex and pixel shader are member functions
-
-		boundObject = (void*)mesh;
-
-		_DrawElementArray<Vertex, Pixel, Mesh, VS_TYPE<Vertex, Pixel>, PS_TYPE<Pixel>>(numIndexGroups, indices, vertices, nullptr, nullptr);
-
-		boundObject = nullptr;
 	}
 
 	const DepthBuffer& GetDepthBuffer() const;

@@ -6,15 +6,10 @@
 #include "Cubemap.h"
 #include "Shapes.h"
 #include "Light.h"
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#include "Cow.h"
 
-Mat4 rotation = Mat4::GetRotation(0, PI / 4, 0);
 Mat4 rotation2 = Mat4::GetRotation(0, 0, 0);
-Mat4 translation = Mat4::Get3DTranslation(0, -2.2, -25);
 Mat4 translation2 = Mat4::Get3DTranslation(0, -5, 0);
-Mat4 scale = Mat4::GetScale(1, 1, 1);
 Mat4 scale2 = Mat4::GetScale(100, 1, 100);
 
 Frustum projFrustum;
@@ -26,7 +21,10 @@ Vec3 cameraRot(11 * PI / 6, 0, 0);
 
 //Vec3 lightDir(0, 0, -1);
 Vec3 lightRot(-PI * 2 / 2.2 + 2 * PI, 0, 0);
-DirectionalLight dl({ 1, 1, 1 }, lightRot, 2000, 2000);
+//DirectionalLight dl({ 1, 0, 0 }, lightRot, 2048, 2048);
+SpotLight sl({ 1, 1, 1 }, { 0, 6, 0}, { 11 * PI / 6, 0, 0 }, 1.0f, 0.01f, 0.0f, 10);
+
+Cow cow({0, -2.2, -25}, {0, PI / 4, 0}, {1, 1, 1});
 
 Surface texture("images/grass.jpg");
 
@@ -80,26 +78,7 @@ TestPixel TestVertexShader(TestVertex& vertex) {
 
 	Mat4 mObject = translation2 * rotation2 * scale2;
 
-	Vec4 s = dl.WorldToViewportTransform(mObject * vertex.position);
-	tp.shadow = { s.s, s.t, s.p };
-
-	return tp;
-
-}
-
-TestPixel TestVertexShader2(TestVertex& vertex) {
-
-	Vec4 worldPos = translation * rotation * scale * vertex.position;
-	Vec4 thing = projection * view * worldPos;
-	Vec3 norm = rotation.Truncate() * vertex.normal;
-
-	TestPixel tp(thing, norm);
-	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
-	tp.texel = vertex.texel * 25;
-
-	Mat4 mObject = translation * rotation * scale;
-
-	Vec4 s = dl.WorldToViewportTransform(mObject * vertex.position);
+	Vec4 s = Mat4::Viewport * sl.WorldToShadowMatrix() * mObject * vertex.position;
 	tp.shadow = { s.s, s.t, s.p };
 
 	return tp;
@@ -107,37 +86,25 @@ TestPixel TestVertexShader2(TestVertex& vertex) {
 }
 
 Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampler2d) {
-
-	/*int x = pixel.shadow.s * shadowMap.GetWidth();
-	int y = pixel.shadow.t * shadowMap.GetHeight();
-	float fracInShadow = 0;
-	for (int i = x - 1; i < x + 1; ++i) {
-		for (int j = y - 1; j < y + 1; ++j) {
-
-			if (i >= 0 && i < shadowMap.GetWidth() && j >= 0 && j < shadowMap.GetHeight()) {
-
-				float sample = shadowMap.GetPixel(i, j);
-
-				if (pixel.shadow.p > sample + 0.001)
-					fracInShadow += 1.0 / 9;
-
-			}
-
-		}
-	}*/
 	
-	//else {
-		//return { 1, 0, 0, 1 };
-
-	float fracInShadow = 0;
-	float compDepth = dl.SampleShadowMap(pixel.shadow.s, pixel.shadow.t);
-	if (pixel.shadow.p > compDepth + 0.01)
-		fracInShadow = 1;
+	float fracInShadow = sl.MultiSampleShadowMap(pixel.shadow, 1);
 	
 
-	Vec3 col = dl.GetColorAt(pixel.normal.Normalized());
+	//float fracInShadow = 0;
+	//float compDepth = dl.SampleShadowMap(pixel.shadow.s, pixel.shadow.t);
+	//if (pixel.shadow.p > compDepth + 0.01)
+		//fracInShadow = 1;
+	
+	//Vec3 col = dl.GetColorAt(pixel.normal.Normalized());
+	Vec3 col = sl.GetColorAt(pixel.worldPos);
 
-	col *= (1 - fracInShadow * 0.5);
+	col.r -= fracInShadow * 0.1f;
+	col.g -= fracInShadow * 0.1f;
+	col.b -= fracInShadow * 0.1f;
+
+	if (col.r < 0) col.r = 0;
+	if (col.g < 0) col.g = 0;
+	if (col.b < 0) col.b = 0;
 
 	return { col.r, col.g, col.b, 1 };
 	
@@ -168,66 +135,6 @@ public:
 
 	Vec4& GetPos() { return position; }
 };
-SphereVertex* sv;
-
-SpherePixel SphereVertexShader(SphereVertex& v) {
-
-	Vec4 worldPos = translation * rotation * scale * v.position;
-	Vec4 thing = projection * view * worldPos;
-	Vec3 norm =  rotation.Truncate() * Vec3(v.position.x, v.position.y, v.position.z);
-
-	SpherePixel tp(thing, norm);
-	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
-
-	Mat4 mObject = translation * rotation * scale;
-	Vec4 s = dl.WorldToViewportTransform(mObject * v.position);
-
-	tp.shadow = { s.s, s.t, s.p };
-
-	return tp;
-}
-
-Vec4 SpherePixelShader(SpherePixel& sp, const Renderer::Sampler<SpherePixel>& samp) {
-
-	float dot = -(Mat3::GetRotation(lightRot.r, lightRot.g, lightRot.b) * Vec3(0, 0, -1)) * sp.normal.Normalized();
-	if (dot < 0)
-		dot = 0;
-
-	float compDepth = 1e99;
-	
-	Vec4 col = { dot, dot, dot, 1 };
-
-	if (sp.shadow.p > compDepth + 0.1)
-		col *= 0.9;
-
-	return col;
-
-	//Vec3 reflect = toCam.Reflect(sp.normal);
-	//Vec3 reflect = toCam.Refract(sp.normal, 1, 1.33);
-
-	//Vec4 col = samp.SampleCubeMap(cb.GetPlanes(), reflect.x, reflect.y, reflect.z);
-
-	//return { col.r, col.g * 0.5f, col.b * 0.5f, 1 };
-}
-
-TestPixel ShadowVertexShader(TestVertex& v) {
-
-	Mat4 mObject = translation * rotation * scale;
-	Vec4 pos = dl.WorldToShadowTransform(mObject * v.position);
-	
-	return {pos , {0, 0, 0} };
-
-}
-
-Vec4 ShadowPixelShader(TestPixel& sp, const Renderer::Sampler<TestPixel>& samp) {
-
-	return { 0, 0, 0, 0 };
-
-}
-
-int numBoxIndices = 0;
-int* boxIndices;
-TestVertex* boxVerts;
 
 float r = 0.1;
 
@@ -245,11 +152,11 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
 
 	if (keyboard[SDL_SCANCODE_Q]) {
-		rotation = rotation * Mat4::GetRotation(0, 0.1, 0);
+		cow.rotation.y += 0.1;
 		lightRot.r += deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_E]) {
-		rotation = rotation * Mat4::GetRotation(0, -0.1, 0);
+		cow.rotation.y -= 0.1;
 		lightRot.r -= deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_W]) {
@@ -288,10 +195,10 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 	}
 
 	if (keyboard[SDL_SCANCODE_R]) {
-		translation(1, 3) -= deltaTime;
+		cow.position.y -= deltaTime;
 	}
 	if (keyboard[SDL_SCANCODE_F]) {
-		translation(1, 3) += deltaTime;
+		cow.position.y += deltaTime;
 	}
 
 	if (keyboard[SDL_SCANCODE_I]) {
@@ -307,13 +214,14 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	Mat4 camToWorld = view.GetInverse();
 	
-	dl.UpdateShadowBox(projFrustum, camToWorld);
-	dl.DrawToShadowMap<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, ShadowVertexShader, ShadowPixelShader);
-	
-	renderer.DrawElementArray<TestVertex, TestPixel>(numBoxIndices / 3, boxIndices, boxVerts, TestVertexShader2, TestPixelShader);
-	renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
+	//sl.UpdateShadowBox(projFrustum, camToWorld);
 
-	dl.ClearShadowMap();
+	//cow.AddToShadowMap(sl);
+	cow.Render(renderer, projection, view, sl, cameraPos);
+	
+	//renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
+
+	//sl.ClearShadowMap();
 
 	SDL_Event event = {};
 	while (SDL_PollEvent(&event)) {
@@ -360,40 +268,6 @@ void PostProcess(Surface& frontBuffer) {
 int main(int argc, char* argv[]) {
 
 	texture.GenerateMipMaps();
-
-	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFile("models/OBJ/Cow2.obj", aiProcess_Triangulate);
-
-	const aiMesh* mesh = scene->mMeshes[0];
-
-	numBoxIndices = mesh->mNumFaces * 3;
-	boxIndices = new int[ numBoxIndices ];
-
-	for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
-
-		boxIndices[3 * i] = mesh->mFaces[i].mIndices[0];
-		boxIndices[3 * i + 1] = mesh->mFaces[i].mIndices[1];
-		boxIndices[3 * i + 2] = mesh->mFaces[i].mIndices[2];
-
-	}
-
-	boxVerts = new TestVertex[mesh->mNumVertices];
-	for (unsigned int i = 0; i < mesh->mNumVertices; ++i) {
-
-		Vec4 pos; 
-		pos.x = mesh->mVertices[i].x;
-		pos.y = mesh->mVertices[i].y;
-		pos.z = mesh->mVertices[i].z;
-		pos.w = 1;
-
-		Vec3 norm;
-		norm.x = mesh->mNormals[i].x;
-		norm.y = mesh->mNormals[i].y;
-		norm.z = mesh->mNormals[i].z;
-
-		boxVerts[i] = { pos, norm, {0, 0} };
-
-	}
 	
 	Instance::Init();
 
@@ -411,11 +285,6 @@ int main(int argc, char* argv[]) {
 	projFrustum.top = (float)window.GetHeight() / window.GetWidth();
 	projFrustum.bottom = -(float)window.GetHeight() / window.GetWidth();
 
-	sv = new SphereVertex[sphere.nVertices];
-	for (int i = 0; i < sphere.nVertices; ++i) {
-		sv[i].position = sphere.pVertices[i];
-	}
-
 	StartDoubleBufferedInstance(window, RenderLogic, PostProcess,  RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
 
 	
@@ -432,11 +301,6 @@ int main(int argc, char* argv[]) {
 
 	//window.DrawSurface(s);
 	//window.BlockUntilQuit();
-
-	delete[] sv;
-
-	delete[] boxIndices;
-	delete[] boxVerts;
 
 	return 0;
 }

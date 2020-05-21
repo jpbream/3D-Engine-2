@@ -9,23 +9,23 @@ class Cubemap
 
 private:
 
-	class Vertex {
+	class C_Vertex {
 
 	public:
 		Vec4 position;
 
-		Vertex(const Vec4& position);
+		C_Vertex(const Vec4& position);
 
 	};
 
-	class Pixel : public Renderer::PixelShaderInput {
+	class C_Pixel : public Renderer::PixelShaderInput {
 
 	public:
 		Vec4 position;
 		Vec4 texDirection;
 
-		Pixel();
-		Pixel(const Vec4& position, const Vec4& texDirection);
+		C_Pixel();
+		C_Pixel(const Vec4& position, const Vec4& texDirection);
 
 		Vec4& GetPos() override;
 
@@ -47,7 +47,12 @@ private:
 	const Mat4* view = nullptr;
 
 	static int INDICES[36];
-	static Vertex VERTICES[8];
+	static C_Vertex VERTICES[8];
+
+	static Cubemap* boundObject;
+
+	static C_Pixel VertexShader(C_Vertex& vertex);
+	static Vec4 PixelShader(C_Pixel& pixel, const Renderer::Sampler<C_Pixel>& sampler);
 
 public:
 
@@ -63,8 +68,5 @@ public:
 	void Render(Renderer& renderer, const Mat4& view, const Mat4& projection);
 
 	const Surface* GetPlanes() const;
-
-	Pixel VertexShader(Vertex& vertex);
-	Vec4 PixelShader(Pixel& pixel, const Renderer::Sampler<Pixel>& sampler);
 
 };

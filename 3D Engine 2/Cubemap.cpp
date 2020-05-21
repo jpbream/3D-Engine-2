@@ -26,7 +26,7 @@ int Cubemap::INDICES[36] = {
 
 };
 
-Cubemap::Vertex Cubemap::VERTICES[8] = {
+Cubemap::C_Vertex Cubemap::VERTICES[8] = {
 	{ Vec4(-.5, -.5, -.5, 1) },
 	{ Vec4(.5, -.5, -.5, 1) },
 	{ Vec4(.5, .5, -.5, 1) },
@@ -36,6 +36,8 @@ Cubemap::Vertex Cubemap::VERTICES[8] = {
 	{ Vec4(.5, .5, .5, 1) },
 	{ Vec4(-.5, .5, .5, 1) }
 };
+
+Cubemap* Cubemap::boundObject = nullptr;
 
 Cubemap::Cubemap(
 	const std::string& posx,
@@ -52,11 +54,10 @@ Cubemap::Cubemap(
 
 }
 
-Cubemap::Vertex::Vertex(const Vec4& position) : position(position) {}
-Cubemap::Pixel::Pixel() {}
-Cubemap::Pixel::Pixel(const Vec4& position, const Vec4& texDirection) : position(position), texDirection(texDirection) {}
-
-Vec4& Cubemap::Pixel::GetPos() { return position; }
+Cubemap::C_Vertex::C_Vertex(const Vec4& position) : position(position) {}
+Cubemap::C_Pixel::C_Pixel() {}
+Cubemap::C_Pixel::C_Pixel(const Vec4& position, const Vec4& texDirection) : position(position), texDirection(texDirection) {}
+Vec4& Cubemap::C_Pixel::GetPos() { return position; }
 
 const Surface* Cubemap::GetPlanes() const {
 	return &posx;
@@ -67,18 +68,21 @@ void Cubemap::Render(Renderer& renderer, const Mat4& view, const Mat4& projectio
 	this->projection = &projection;
 	this->view = &view;
 
-	renderer.DrawElementArray<Vertex, Pixel, Cubemap>(this, NUM_TRIANGLES, INDICES, VERTICES);
+	boundObject = this;
 
+	renderer.DrawElementArray<C_Vertex, C_Pixel>(NUM_TRIANGLES, INDICES, VERTICES, VertexShader, PixelShader);
+
+	boundObject = nullptr;
 }
 
-Cubemap::Pixel Cubemap::VertexShader(Vertex& vertex) {
+Cubemap::C_Pixel Cubemap::VertexShader(C_Vertex& vertex) {
 
-	Vec4 pos = *projection * *view * transform * vertex.position;
+	Vec4 pos = *(boundObject->projection) * *(boundObject->view) * boundObject->transform * vertex.position;
 	return { pos, vertex.position };
 
 }
-Vec4 Cubemap::PixelShader(Pixel& pixel, const Renderer::Sampler<Pixel>& sampler) {
+Vec4 Cubemap::PixelShader(C_Pixel& pixel, const Renderer::Sampler<C_Pixel>& sampler) {
 
 	// this scheme came from LearnOpenGL.com
-	return sampler.SampleCubeMap(GetPlanes(), pixel.texDirection.x, pixel.texDirection.y, pixel.texDirection.z);
+	return sampler.SampleCubeMap(boundObject->GetPlanes(), pixel.texDirection.x, pixel.texDirection.y, pixel.texDirection.z);
  }
