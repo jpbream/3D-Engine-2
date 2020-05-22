@@ -4,7 +4,7 @@
 #include "Vec4.h"
 #include "Vec3.h"
 
-# define PI 3.14159265358979323846
+#define PI 3.14159265358979323846
 
 // returns an integer color value from a Vec4
 #define COMPRESS4(v) ((int)(v.r * 255) | (int)(v.g * 255) << 8 | (int)(v.b * 255) << 16 | (int)(v.a * 255) << 24)
@@ -24,6 +24,8 @@ private:
 	int* pPixels;
 	int width;
 	int height;
+
+	int allocatedSpace;
 
 	int pitch;
 	
@@ -94,7 +96,7 @@ public:
 	void SetContrast(float contrast);
 
 	inline const Vec4& GetPixel(int x, int y) const {
-
+	
 		int color = pPixels[width * y + x];
 		return EXPAND4(color);
 

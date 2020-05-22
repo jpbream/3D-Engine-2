@@ -2,14 +2,12 @@
 #include "Renderer.h"
 #include "Light.h"
 
-#define FILE "models/OBJ/Cow2.obj"
-
 class Cow
 {
 
 private:
 
-	Vec3 diffuseColor = { 1, 0, 1 };
+	Vec3 diffuseColor = { 1, 0, 0 };
 
 	class CowVertex {
 	public:

@@ -8,6 +8,8 @@
 #include <thread>
 #include <vector>
 
+#define FLOAT_OFFSET(OBJECT, MEMBER) (int)((float*)&OBJECT.MEMBER - (float*)&OBJECT)
+
 #ifndef _DEBUG
 #define THREADS (std::thread::hardware_concurrency() - 2) / 2
 #else
@@ -95,6 +97,8 @@ public:
 		float* pDepths;
 		int width;
 		int height;
+
+		int allocatedSpace;
 
 		DepthBuffer(int width, int height);
 

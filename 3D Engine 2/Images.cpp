@@ -1,9 +1,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <STB/stb_image.h>
-#include "STB_Image_Wrapper.h"
+#include "Images.h"
 #include <iostream>
 
-namespace STBI {
+namespace Images {
 
 	unsigned char* Load(const std::string& filename, int* width, int* height, int bpp) {
 

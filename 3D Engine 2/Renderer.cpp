@@ -68,15 +68,26 @@ Surface& Renderer::GetRenderTarget() {
 	return *pRenderTarget;
 }
 
-Renderer::DepthBuffer::DepthBuffer(int width, int height) : width(width), height(height) {
+Renderer::DepthBuffer::DepthBuffer(int width, int height) 
+	: 
+	width(width), height(height) 
+{
 
 	pDepths = new float[width * height];
+	allocatedSpace = width * height;
 
 }
 
-Renderer::DepthBuffer::DepthBuffer() : width(0), height(0), pDepths(nullptr) {}
+Renderer::DepthBuffer::DepthBuffer() 
+	: 
+	width(0), height(0), pDepths(nullptr), allocatedSpace(0) 
+{
+}
 
-Renderer::DepthBuffer::DepthBuffer(const DepthBuffer& db) : width(db.width), height(db.height) {
+Renderer::DepthBuffer::DepthBuffer(const DepthBuffer& db) 
+	: 
+	width(db.width), height(db.height), allocatedSpace(db.allocatedSpace)
+{
 
 	pDepths = new float[width * height];
 	memcpy(pDepths, db.pDepths, width * height * sizeof(float));
@@ -85,13 +96,9 @@ Renderer::DepthBuffer::DepthBuffer(const DepthBuffer& db) : width(db.width), hei
 
 Renderer::DepthBuffer& Renderer::DepthBuffer::operator=(const DepthBuffer& db) {
 
-	width = db.width;
-	height = db.height;
 
-	if (pDepths != nullptr)
-		delete[] pDepths;
+	Resize(db.width, db.height);
 
-	pDepths = new float[width * height];
 	memcpy(pDepths, db.pDepths, width * height * sizeof(float));
 
 	return *this;
@@ -104,10 +111,11 @@ Renderer::DepthBuffer::~DepthBuffer() {
 
 void Renderer::DepthBuffer::Resize(int width, int height) {
 
-	if (width * height > this->width * this->height) {
+	if (width * height > allocatedSpace) {
 
 		delete[] pDepths;
 		pDepths = new float[width * height];
+		allocatedSpace = width * height;
 
 	}
 

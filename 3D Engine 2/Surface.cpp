@@ -1,11 +1,16 @@
 #include "Surface.h"
 #include <memory>
 #include <SDL.h>
-#include "STB_Image_Wrapper.h"
+#include "Images.h"
 
-Surface::Surface(int width, int height) : width(width), height(height) {
+Surface::Surface(int width, int height) 
+	: 
+	width(width), height(height) 
+{
 
 	pPixels = new int[width * height];
+	allocatedSpace = width * height;
+
 	BlackOut();
 
 	pitch = width * 4;
@@ -19,7 +24,7 @@ Surface::Surface(int width, int height) : width(width), height(height) {
 }
 Surface::Surface(const Surface& surface)
 	: 
-	width(surface.width), height(surface.height), pitch(surface.pitch), 
+	width(surface.width), height(surface.height), allocatedSpace(surface.allocatedSpace), pitch(surface.pitch), 
 	rMask(surface.rMask), gMask(surface.gMask), bMask(surface.bMask), aMask(surface.aMask) 
 {
 
@@ -33,7 +38,7 @@ Surface::Surface(const Surface& surface)
 
 }
 Surface::Surface(Surface&& surface) noexcept :
-	width(surface.width), height(surface.height), pitch(surface.pitch),
+	width(surface.width), height(surface.height), allocatedSpace(surface.allocatedSpace), pitch(surface.pitch),
 	rMask(surface.rMask), gMask(surface.gMask), bMask(surface.bMask), aMask(surface.aMask), pPixels(surface.pPixels)
 {
 
@@ -42,7 +47,8 @@ Surface::Surface(Surface&& surface) noexcept :
 
 Surface::Surface(const std::string& filename) {
 
-	pPixels = (int*)STBI::Load(filename, &width, &height, BPP);
+	pPixels = (int*)Images::Load(filename, &width, &height, BPP);
+	allocatedSpace = width * height;
 
 	pitch = width * 4;
 	aMask = 0xff000000;
@@ -58,6 +64,7 @@ Surface& Surface::operator=(const Surface& surface) {
 
 	width = surface.width;
 	height = surface.height;
+	allocatedSpace = surface.allocatedSpace;
 	pitch = surface.pitch;
 	rMask = surface.rMask;
 	gMask = surface.gMask;
@@ -77,6 +84,7 @@ Surface& Surface::operator=(Surface&& surface) noexcept {
 
 	width = surface.width;
 	height = surface.height;
+	allocatedSpace = surface.allocatedSpace;
 	rMask = surface.rMask;
 	gMask = surface.gMask;
 	bMask = surface.bMask;
@@ -158,11 +166,12 @@ void Surface::SaveToFile(const std::string& filename) const {
 
 void Surface::Resize(int width, int height, bool maintainImage) {
 
-	if (width * height > this->width* this->height || maintainImage) {
+	if (width * height > allocatedSpace || maintainImage) {
 
 		// if there is a need to reallocate or they want to maintain the image
 
 		int* newBuf = new int[width * height];
+		allocatedSpace = width * height;
 		
 		if (maintainImage) {
 
@@ -208,6 +217,7 @@ void Surface::Rescale(float xScale, float yScale) {
 	int newHeight = height * yScale;
 
 	int* newBuf = new int[newWidth * newHeight];
+	allocatedSpace = newWidth * newHeight;
 
 	for (int row = 0; row < newHeight; ++row) {
 
@@ -255,7 +265,7 @@ void Surface::DrawLine(int x1, int y1, int x2, int y2, int rgb) {
 
 	if (abs(dy) > abs(dx)) {
 
-		double slope = (double)dx / dy;
+		float slope = (float)dx / dy;
 
 		int inc = (y2 - y1) / abs(y2 - y1);
 
@@ -268,7 +278,7 @@ void Surface::DrawLine(int x1, int y1, int x2, int y2, int rgb) {
 	}
 	else {
 
-		double slope = (double)dy / dx;
+		float slope = (float)dy / dx;
 
 		int inc = (x2 - x1) / abs(x2 - x1);
 

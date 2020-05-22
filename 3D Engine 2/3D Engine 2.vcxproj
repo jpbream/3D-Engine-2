@@ -151,6 +151,7 @@
     <ClCompile Include="Cow.cpp" />
     <ClCompile Include="Cubemap.cpp" />
     <ClCompile Include="Entry.cpp" />
+    <ClCompile Include="Importing.cpp" />
     <ClCompile Include="Instance.cpp" />
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="Manager.cpp" />
@@ -159,7 +160,7 @@
     <ClCompile Include="Mat4.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="Shapes.cpp" />
-    <ClCompile Include="STB_Image_Wrapper.cpp" />
+    <ClCompile Include="Images.cpp" />
     <ClCompile Include="Surface.cpp" />
     <ClCompile Include="Vec2.cpp" />
     <ClCompile Include="Vec3.cpp" />
@@ -170,6 +171,7 @@
     <ClInclude Include="Cow.h" />
     <ClInclude Include="Cubemap.h" />
     <ClInclude Include="Engine.h" />
+    <ClInclude Include="Importing.h" />
     <ClInclude Include="Instance.h" />
     <ClInclude Include="Light.h" />
     <ClInclude Include="Manager.h" />
@@ -178,7 +180,7 @@
     <ClInclude Include="Mat4.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Shapes.h" />
-    <ClInclude Include="STB_Image_Wrapper.h" />
+    <ClInclude Include="Images.h" />
     <ClInclude Include="Surface.h" />
     <ClInclude Include="Vec2.h" />
     <ClInclude Include="Vec3.h" />

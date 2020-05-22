@@ -48,9 +48,6 @@
     <ClCompile Include="Renderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="STB_Image_Wrapper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Manager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -64,6 +61,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Cow.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Importing.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Images.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -101,9 +104,6 @@
     <ClInclude Include="Renderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="STB_Image_Wrapper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Manager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -117,6 +117,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Cow.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Importing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Images.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

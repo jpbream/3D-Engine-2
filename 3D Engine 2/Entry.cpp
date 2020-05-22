@@ -22,7 +22,7 @@ Vec3 cameraRot(11 * PI / 6, 0, 0);
 //Vec3 lightDir(0, 0, -1);
 Vec3 lightRot(-PI * 2 / 2.2 + 2 * PI, 0, 0);
 //DirectionalLight dl({ 1, 0, 0 }, lightRot, 2048, 2048);
-SpotLight sl({ 1, 1, 1 }, { 0, 6, 0}, { 11 * PI / 6, 0, 0 }, 1.0f, 0.01f, 0.0f, 10);
+SpotLight sl({ 1, 1, 1 }, { 0, 6, 0}, { 11 * PI / 6, 0, 0 }, 1.0f, 0.00f, 0.0f, 1);
 
 Cow cow({0, -2.2, -25}, {0, PI / 4, 0}, {1, 1, 1});
 

@@ -1,8 +1,6 @@
 #include "Cow.h"
 #include "Mat3.h"
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#include "Importing.h"
 
 #define MODEL 0
 #define MVP 1
@@ -12,6 +10,8 @@
 #define CAMERA 0
 
 #define SHADOW_SAMPLE 1
+
+#define FILE "models/OBJ/Cow2.obj"
 
 const Cow* Cow::boundObject = nullptr;
 Mat4 Cow::boundMatrices[10];
@@ -52,23 +52,9 @@ Vec4 Cow::MainPixelShader(CowPixel& pixel, const Renderer::Sampler<CowPixel>& sa
 
 	Vec3 normal = pixel.normal.Normalized();
 	Vec3 toCamera = (boundVectors[CAMERA] - pixel.worldPos).Normalized();
-	Vec3 toLight = (boundLight->GetPosition() - pixel.worldPos).Normalized();
-
-	// specular reflection model described in
-	// "Mathematics for 3D Game Programming and Computer Graphics" by Eric Lengyel
-	// Section 7.4
-
-	// vector halfway between to-viewer and to-light vector
-	Vec3 halfway = (toLight + toCamera).Normalized();
-
+	
 	// spec factor is how much to scale the specular color by
-	float specFactor = normal * halfway;
-	if ( specFactor < 0 )
-		specFactor = 0;
-	else
-		specFactor = powf(specFactor, 15);
-
-	specFactor = normal * toLight > 0 ? specFactor : 0;
+	float specFactor = boundLight->SpecularFactor(pixel.worldPos, normal, toCamera, 15);
 
 	// the colors based on the materials surface properties
 	// diffuse, specular (specular color will be the light color)
@@ -113,42 +99,26 @@ Cow::Cow(const Vec3& position, const Vec3& rotation, const Vec3& scale)
 	:
 	position(position), rotation(rotation), scale(scale)
 {
+	Scene scene(FILE);
 
-	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFile(FILE, aiProcess_Triangulate);
+	Mesh mesh = scene.MeshAt(0);
 
-	const aiMesh* mesh = scene->mMeshes[0];
-
-	nTriangles = mesh->mNumFaces;
+	nTriangles = mesh.NumTriangles();
 	pIndices = new int[nTriangles * 3];
 
 	// read indices
-	for ( unsigned int i = 0; i < mesh->mNumFaces; ++i ) {
-
-		pIndices[3 * i] = mesh->mFaces[i].mIndices[0];
-		pIndices[3 * i + 1] = mesh->mFaces[i].mIndices[1];
-		pIndices[3 * i + 2] = mesh->mFaces[i].mIndices[2];
-
-	}
+	for ( unsigned int i = 0; i < nTriangles * 3; ++i )
+		pIndices[i] = mesh.Indices(i);
 
 	// read vertices
-	pVertices = new CowVertex[mesh->mNumVertices];
-	for ( unsigned int i = 0; i < mesh->mNumVertices; ++i ) {
+	pVertices = new CowVertex[mesh.NumVertices()];
+	for ( unsigned int i = 0; i < mesh.NumVertices(); ++i ) {
 
-		Vec4 pos;
-		pos.x = mesh->mVertices[i].x;
-		pos.y = mesh->mVertices[i].y;
-		pos.z = mesh->mVertices[i].z;
-		pos.w = 1;
-
-		Vec3 norm;
-		norm.x = mesh->mNormals[i].x;
-		norm.y = mesh->mNormals[i].y;
-		norm.z = mesh->mNormals[i].z;
+		Vec4 pos = mesh.Positions(i).Vec4();
+		Vec3 norm = mesh.Normals(i);
 
 		pVertices[i] = { pos, norm, {0, 0} };
 	}
-
 }
 
 Cow::~Cow()
@@ -162,10 +132,12 @@ void Cow::AddToShadowMap(SpotLight& light)
 	boundObject = this;
 	boundLight = &light;
 
+	// bind the model matrix
 	boundMatrices[MODEL] = Mat4::Get3DTranslation(position.x, position.y, position.z) *
 		Mat4::GetRotation(rotation.x, rotation.y, rotation.z) *
 		Mat4::GetScale(scale.x, scale.y, scale.z);
 
+	// bind the world to shadow space matrix
 	boundMatrices[SHADOW] = light.WorldToShadowMatrix();
 
 	light.DrawToShadowMap<CowVertex, CowPixel>(nTriangles, pIndices, pVertices, ShadowVertexShader, ShadowPixelShader);
@@ -179,16 +151,21 @@ void Cow::Render(Renderer& renderer, const Mat4& proj, const Mat4& view, const S
 	boundObject = this;
 	boundLight = &light;
 
+	// bind the model matrix
 	boundMatrices[MODEL] = Mat4::Get3DTranslation(position.x, position.y, position.z) *
 		Mat4::GetRotation(rotation.x, rotation.y, rotation.z) *
 		Mat4::GetScale(scale.x, scale.y, scale.z);
 
+	// bind the model view projection matrix
 	boundMatrices[MVP] = proj * view * boundMatrices[MODEL];
 
+	// bind the matrix to transform normals
 	boundMatrices[NORM] = Mat4::GetRotation(rotation.x, rotation.y, rotation.z);
 
+	// bind the world to shadow space matrix
 	boundMatrices[SHADOW] = light.WorldToShadowMatrix();
 
+	// bind the cameras position
 	boundVectors[CAMERA] = cameraPos;
 
 	renderer.DrawElementArray<CowVertex, CowPixel>(nTriangles, pIndices, pVertices, MainVertexShader, MainPixelShader);

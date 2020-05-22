@@ -113,6 +113,27 @@ float DirectionalLight::FacingFactor(const Vec3& surfaceNormal) const
 	return ff;
 }
 
+float DirectionalLight::SpecularFactor(const Vec3& surfaceNormal, const Vec3& toCamera, float specularExponent) const
+{
+	// specular reflection model described in
+	// "Mathematics for 3D Game Programming and Computer Graphics" by Eric Lengyel
+	// Section 7.4
+
+	Vec3 toLight = -direction;
+
+	// vector halfway between to-viewer and to-light vector
+	Vec3 halfway = (toLight + toCamera).Normalized();
+
+	// spec factor is how much to scale the specular color by
+	float specFactor = surfaceNormal * halfway;
+	if ( specFactor < 0 )
+		specFactor = 0;
+	else
+		specFactor = powf(specFactor, specularExponent);
+
+	return surfaceNormal * toLight > 0 ? specFactor : 0;
+}
+
 void DirectionalLight::SetColor(const Vec3& color)
 {
 	this->color = color;
@@ -275,6 +296,27 @@ float SpotLight::FacingFactor(const Vec3& surfaceNormal) const
 	if ( ff < 0 )
 		return 0;
 	return ff;
+}
+
+float SpotLight::SpecularFactor(const Vec3& worldPosition, const Vec3& surfaceNormal, const Vec3& toCamera, float specularExponent) const
+{
+	// specular reflection model described in
+	// "Mathematics for 3D Game Programming and Computer Graphics" by Eric Lengyel
+	// Section 7.4
+
+	Vec3 toLight = (position - worldPosition).Normalized();
+
+	// vector halfway between to-viewer and to-light vector
+	Vec3 halfway = (toLight + toCamera).Normalized();
+
+	// spec factor is how much to scale the specular color by
+	float specFactor = surfaceNormal * halfway;
+	if ( specFactor < 0 )
+		specFactor = 0;
+	else
+		specFactor = powf(specFactor, specularExponent);
+
+	return surfaceNormal * toLight > 0 ? specFactor : 0;
 }
 
 void SpotLight::SetColor(const Vec3& color)
