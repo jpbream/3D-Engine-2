@@ -7,6 +7,9 @@
 #include "Shapes.h"
 #include "Light.h"
 #include "Cow.h"
+#include "Queue.h"
+
+Window* pWindow = nullptr;
 
 Mat4 rotation2 = Mat4::GetRotation(0, 0, 0);
 Mat4 translation2 = Mat4::Get3DTranslation(0, -5, 0);
@@ -148,63 +151,73 @@ int terrainIndices[6] = {3, 2, 1, 3, 1, 0};
 
 bool RenderLogic(Renderer& renderer, float deltaTime) {
 
+	projection = Mat4::GetPerspectiveProjection(1, 75, -1, 1, (float)pWindow->GetHeight() / pWindow->GetWidth(), -(float)pWindow->GetHeight() / pWindow->GetWidth());
+	projFrustum.near = 1;
+	projFrustum.far = 75;
+	projFrustum.left = -1;
+	projFrustum.right = 1;
+	projFrustum.top = (float)pWindow->GetHeight() / pWindow->GetWidth();
+	projFrustum.bottom = -(float)pWindow->GetHeight() / pWindow->GetWidth();
+
 	int numKeys;
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
 
-	if (keyboard[SDL_SCANCODE_Q]) {
+	cow.rotation.y += 1 * deltaTime;
+
+	if ( keyboard[SDL_SCANCODE_Q] ) {
 		cow.rotation.y += 0.1;
 		lightRot.r += deltaTime;
 	}
-	if (keyboard[SDL_SCANCODE_E]) {
+	if ( keyboard[SDL_SCANCODE_E] ) {
 		cow.rotation.y -= 0.1;
 		lightRot.r -= deltaTime;
 	}
-	if (keyboard[SDL_SCANCODE_W]) {
-		
+	if ( keyboard[SDL_SCANCODE_W] ) {
+
 		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
 		cameraDir.y = 0;
 		cameraPos += cameraDir * deltaTime * 2;
 
 	}
-	if (keyboard[SDL_SCANCODE_S]) {
+	if ( keyboard[SDL_SCANCODE_S] ) {
 		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
 		cameraDir.y = 0;
 		cameraPos -= cameraDir * deltaTime * 2;
 	}
 
-	if (keyboard[SDL_SCANCODE_A]) {
+	if ( keyboard[SDL_SCANCODE_A] ) {
 		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
 		cameraDir.y = 0;
 		cameraDir = Mat3::GetRotation(0, PI / 2, 0) * cameraDir;
 		cameraPos += cameraDir * deltaTime * 2;
 	}
-	if (keyboard[SDL_SCANCODE_D]) {
+	if ( keyboard[SDL_SCANCODE_D] ) {
 		Vec3 cameraDir = Mat3::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z) * Vec3(0, 0, -1);
 		cameraDir.y = 0;
 		cameraDir = Mat3::GetRotation(0, PI / 2, 0) * cameraDir;
 		cameraPos -= cameraDir * deltaTime * 2;
 	}
 
-	if (keyboard[SDL_SCANCODE_SPACE]) {
+	if ( keyboard[SDL_SCANCODE_SPACE] ) {
 
 		cameraPos.y += 2 * deltaTime;
 	}
-	if (keyboard[SDL_SCANCODE_LSHIFT]) {
+	if ( keyboard[SDL_SCANCODE_LSHIFT] ) {
 
 		cameraPos.y -= 2 * deltaTime;
 	}
 
-	if (keyboard[SDL_SCANCODE_R]) {
+	if ( keyboard[SDL_SCANCODE_R] ) {
 		cow.position.y -= deltaTime;
 	}
-	if (keyboard[SDL_SCANCODE_F]) {
+	if ( keyboard[SDL_SCANCODE_F] ) {
 		cow.position.y += deltaTime;
 	}
 
-	if (keyboard[SDL_SCANCODE_I]) {
+	if ( keyboard[SDL_SCANCODE_I] ) {
 		SDL_SetRelativeMouseMode(SDL_TRUE);
 	}
-	if (keyboard[SDL_SCANCODE_O]) {
+	if ( keyboard[SDL_SCANCODE_O] ) {
 		SDL_SetRelativeMouseMode(SDL_FALSE);
 	}
 
@@ -223,33 +236,12 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	//sl.ClearShadowMap();
 
-	SDL_Event event = {};
-	while (SDL_PollEvent(&event)) {
-
-		switch (event.type) {
-
-		case SDL_QUIT:
-			return true;
-			break;
-
-		case SDL_MOUSEMOTION:
-
-			if ((event.motion.xrel != 0 || event.motion.yrel != 0) && SDL_GetRelativeMouseMode() == SDL_TRUE) {
-
-				cameraRot.x -= event.motion.yrel * 3.0f / 720;
-				cameraRot.y -= event.motion.xrel * 3.0f / 720;
-
-			}
-
-			break;
-		}
-			
-	}
+	
 	return false;
 
 }
 
-void PostProcess(Surface& frontBuffer) {
+bool PostProcess(Surface& frontBuffer) {
 
 	//frontBuffer.GaussianBlur(10, 3, Surface::BLUR_BOTH);
 	//frontBuffer.Invert();
@@ -262,10 +254,54 @@ void PostProcess(Surface& frontBuffer) {
 		frontBuffer.SaveToFile("images/Screenshot.bmp");
 	}
 
+	return false;
+}
+
+bool EventHandler(Queue<int>& commandQueue)
+{
+	
+	SDL_Event event = {};
+	while ( SDL_PollEvent(&event) ) {
+
+		switch ( event.type ) {
+
+		case SDL_QUIT:
+			return true;
+			break;
+
+		case SDL_MOUSEMOTION:
+
+			if ( (event.motion.xrel != 0 || event.motion.yrel != 0) && SDL_GetRelativeMouseMode() == SDL_TRUE ) {
+
+				cameraRot.x -= event.motion.yrel * 3.0f / 720;
+				cameraRot.y -= event.motion.xrel * 3.0f / 720;
+
+			}
+
+			break;
+
+		case SDL_WINDOWEVENT:
+			switch ( event.window.event ) {
+
+			case SDL_WINDOWEVENT_RESIZED:
+				commandQueue.Enqueue(C_RESIZE);
+				commandQueue.Enqueue(event.window.data1);
+				commandQueue.Enqueue(event.window.data2);
+				break;
+
+			}
+			
+			break;
+		}
+
+	}
+	return false;
 }
 
 
 int main(int argc, char* argv[]) {
+
+	SDL_Init(SDL_INIT_VIDEO);
 
 	texture.GenerateMipMaps();
 	
@@ -273,9 +309,10 @@ int main(int argc, char* argv[]) {
 
 	//texture.GenerateMipMaps();
 	//texture.Tint({ 1, 0, 0, 1 }, 0.2);
-	
+
 	// 2560, 1440
-	Window window("My Window", 20, 20, 750, 750, 0);
+	Window window("My Window", 20, 20, 750, 750, SDL_WINDOW_RESIZABLE);
+	pWindow = &window;
 
 	projection = Mat4::GetPerspectiveProjection(1, 75, -1, 1, (float)window.GetHeight() / window.GetWidth(), -(float)window.GetHeight() / window.GetWidth());
 	projFrustum.near = 1;
@@ -285,7 +322,7 @@ int main(int argc, char* argv[]) {
 	projFrustum.top = (float)window.GetHeight() / window.GetWidth();
 	projFrustum.bottom = -(float)window.GetHeight() / window.GetWidth();
 
-	StartDoubleBufferedInstance(window, RenderLogic, PostProcess,  RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
+	StartDoubleBufferedInstance(window, EventHandler, RenderLogic, PostProcess, RF_MIPMAP | RF_TRILINEAR | RF_BACKFACE_CULL);
 
 	
 

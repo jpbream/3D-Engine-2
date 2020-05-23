@@ -35,6 +35,11 @@ bool Renderer::TestAndSetPixel(int x, int y, float normalizedDepth) {
 	return false;
 }
 
+Renderer::DepthBuffer& Renderer::GetDepthBuffer()
+{
+	return depthBuffer;
+}
+
 const Renderer::DepthBuffer& Renderer::GetDepthBuffer() const {
 
 	return depthBuffer;
@@ -110,6 +115,9 @@ Renderer::DepthBuffer::~DepthBuffer() {
 }
 
 void Renderer::DepthBuffer::Resize(int width, int height) {
+
+	if ( width <= 0 || height <= 0 )
+		return;
 
 	if (width * height > allocatedSpace) {
 

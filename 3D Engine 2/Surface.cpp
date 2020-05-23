@@ -166,10 +166,13 @@ void Surface::SaveToFile(const std::string& filename) const {
 
 void Surface::Resize(int width, int height, bool maintainImage) {
 
+	if ( width <= 0 || height <= 0 )
+		return;
+
 	if (width * height > allocatedSpace || maintainImage) {
 
 		// if there is a need to reallocate or they want to maintain the image
-
+		
 		int* newBuf = new int[width * height];
 		allocatedSpace = width * height;
 		

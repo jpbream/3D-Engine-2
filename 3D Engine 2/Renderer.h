@@ -10,11 +10,7 @@
 
 #define FLOAT_OFFSET(OBJECT, MEMBER) (int)((float*)&OBJECT.MEMBER - (float*)&OBJECT)
 
-#ifndef _DEBUG
 #define THREADS (std::thread::hardware_concurrency() - 2) / 2
-#else
-#define THREADS 0
-#endif
 
 #define X_OFFSET 0
 #define Y_OFFSET 1
@@ -23,13 +19,21 @@
 #define FLAT_TOP 1
 #define FLAT_BOTTOM 2
 
-#define RF_LINEAR_ZBUF 0b0000000000000001
 #define RF_BACKFACE_CULL 0b0000000000000010
 #define RF_OUTLINES 0b0000000000000100
 #define RF_WIREFRAME 0b0000000000001000
 #define RF_BILINEAR 0b0000000000010000
 #define RF_MIPMAP 0b0000000000100000
 #define RF_TRILINEAR 0b0000000001000000
+
+#define THREAD_CUTOFF 15
+
+#define RENDERER_DEBUG
+
+#ifdef RENDERER_DEBUG
+#undef NDEBUG
+#include <assert.h>
+#endif
 
 class Renderer
 {
@@ -433,12 +437,13 @@ private:
 
 	// don't want to use threads for large models
 	// creating many of them kills performance
-	// they are good for cube maps
+	// they are good for small models that take many pixels
 	bool usingThreads = false;
 
 	template <class Pixel, typename PSPtr>
 	void ClipAndDrawTriangle(Pixel& p1, Pixel& p2, Pixel& p3, PSPtr PixelShader, int iteration) {
 
+		// offset of the position dimension we are looking at (x, y, or z)
 		int memberVariableOffset = 0;
 
 		// the sign of a plane with a negative value is POSITIVE
@@ -884,12 +889,20 @@ private:
 	template <class Vertex, class Pixel, typename VSPtr, typename PSPtr>
 	void _DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VSPtr VertexShader, PSPtr PixelShader) {
 
+#ifdef RENDERER_DEBUG
+
+		//INVARIANTS
+
+		// depth buffer size must equal render target size, if there is a render target
+		assert(!(pRenderTarget != nullptr && (pRenderTarget->GetWidth() != depthBuffer.width || pRenderTarget->GetHeight() != depthBuffer.height)));
+#endif
+
 		std::vector<std::thread> threads;
 		std::unordered_map<int, Pixel> processedVertices;
 
 		// creating many many threads seems to cause major lag
 		// so only use threads for models with a few large triangles
-		if (numIndexGroups < 20)
+		if (numIndexGroups < THREAD_CUTOFF)
 			usingThreads = true;
 
 		for (int i = 0; i < numIndexGroups; ++i) {
@@ -958,6 +971,7 @@ public:
 
 	}
 
+	DepthBuffer& GetDepthBuffer();
 	const DepthBuffer& GetDepthBuffer() const;
 	void ClearDepthBuffer();
 

@@ -2,9 +2,26 @@
 #include "Window.h"
 #include "Surface.h"
 #include "Renderer.h"
+#include "Queue.h"
 
 #define REL_RES 1
 #define DIAGNOSTICS
 
-void StartSingleBufferedInstance(Window& window, bool (*ProgramLogic)(Surface& backBuffer, Renderer& renderer, float deltaTime), short renderFlags);
-void StartDoubleBufferedInstance(Window& window, bool (*ProgramLogic)(Renderer& renderer, float deltaTime), void (*PostProcessing)(Surface& frontBuffer), short renderFlags);
+enum Commands {
+
+	C_RESIZE
+
+};
+
+// types for function callbacks
+using EventHandler_T = bool (*)(Queue<int>& commandQueue);
+using ProgramLogic_T = bool (*)(Renderer & renderer, float deltaTime);
+using PostProcess_T = bool (*)(Surface & frontBuffer);
+
+void StartDoubleBufferedInstance(
+	Window& window,
+	EventHandler_T eventHandler,
+	ProgramLogic_T programLogic, 
+	PostProcess_T postProcessing, 
+	short renderFlags
+);
