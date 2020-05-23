@@ -4,6 +4,8 @@
 #include <math.h>
 #include <immintrin.h>
 
+#define PI 3.14159265358979323846
+
 const Mat4 Mat4::Identity{ 
 	{ 1, 0, 0, 0 }, 
 	{ 0, 1, 0, 0 }, 
@@ -301,6 +303,27 @@ Mat4 Mat4::GetPerspectiveProjection(float n, float f, float l, float r, float t,
 	         {(r + l) / (r - l), (t + b) / (t - b), -(f + n) / (f - n), -1}, 
 	         {0, 0, -2 * n * f / (f - n), 0} 
 	};
+}
+
+Mat4 Mat4::GetPerspectiveProjection(float n, float f, float aspect, float fovDegrees, Frustum& outputFrustum)
+{
+	float fov = fovDegrees * PI / 180.0f;
+	float e = 1.0f / tanf(fov / 2.0f);
+
+	float l = -n / e;
+	float r = n / e;
+	float t = aspect * n / e;
+	float b = -aspect * n / e;
+
+	outputFrustum.near = n;
+	outputFrustum.far = f;
+	outputFrustum.left = l;
+	outputFrustum.right = r;
+	outputFrustum.top = t;
+	outputFrustum.bottom = b;
+
+	return GetPerspectiveProjection(n, f, l, r, t, b);
+
 }
 
 Mat4 Mat4::GetOrthographicProjection(float n, float f, float l, float r, float t, float b)

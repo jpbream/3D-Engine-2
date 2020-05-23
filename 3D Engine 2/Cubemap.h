@@ -65,7 +65,7 @@ public:
 		const std::string& negz
 	);
 
-	void Render(Renderer& renderer, const Mat4& view, const Mat4& projection);
+	void Render(Renderer& renderer, const Mat4& rotView, const Mat4& projection);
 
 	const Surface* GetPlanes() const;
 

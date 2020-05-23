@@ -27,6 +27,7 @@
 #define RF_TRILINEAR 0b0000000001000000
 
 #define THREAD_CUTOFF 15
+#define WRAP_OFFSET 1e-7f
 
 #define RENDERER_DEBUG
 
@@ -213,8 +214,8 @@ public:
 		Vec4 LinearSample(const Surface& texture, const Vec2& texel) const {
 
 			// enables texture tiling
-			float s = texel.s - (int)texel.s;
-			float t = texel.t - (int)texel.t;
+			float s = texel.s - (int)(texel.s - WRAP_OFFSET);
+			float t = texel.t - (int)(texel.t - WRAP_OFFSET);
 
 			// completely regular texture sample
 			return texture.GetPixel((int)(s * (texture.GetWidth() - 1)), (int)(t * (texture.GetHeight() - 1)));
@@ -226,8 +227,8 @@ public:
 			// From Section 7.5.4, "Mathematics for 3D Game Programming and Computer Graphics", Lengyel
 
 			// enables texture tiling
-			float s = texel.s - (int)texel.s;
-			float t = texel.t - (int)texel.t;
+			float s = texel.s - (int)(texel.s - WRAP_OFFSET);
+			float t = texel.t - (int)(texel.t - WRAP_OFFSET);
 
 			// texel location minus half a pixel in x and y
 			int i = (texture.GetWidth() * s - 0.5);
@@ -356,7 +357,7 @@ public:
 
 			// Cube map sampling equations from section 7.5, "Mathematics for 3D Game Programming and Computer Graphics", Lengyel
 
-			const Surface* surfaceToSample = nullptr;
+			const Surface* surfaceToSample = &planes[0];
 			float finalS = 0;
 			float finalT = 0;
 
@@ -367,9 +368,9 @@ public:
 			// figure out the face to sample and the coordinate to sample at
 			// determined by sign of coordinate with largest absolute value
 
-			if (absS >= absT && absS >= absP) {
+			if ( absS >= absT && absS >= absP ) {
 
-				if (s > 0) {
+				if ( s > 0 ) {
 					// positive x
 					surfaceToSample = &planes[0];
 					finalS = 0.5f - p / (2 * s);
@@ -384,9 +385,9 @@ public:
 				}
 
 			}
-			else if (absT >= absS && absT >= absP) {
+			else if ( absT >= absS && absT >= absP ) {
 
-				if (t > 0) {
+				if ( t > 0 ) {
 					// positive y
 					surfaceToSample = &planes[2];
 					finalS = 0.5f + s / (2 * t);
@@ -401,7 +402,8 @@ public:
 
 			}
 			else {
-				if (p > 0) {
+
+				if ( p > 0 ) {
 					// positive z
 					surfaceToSample = &planes[4];
 					finalS = 0.5f + s / (2 * p);
@@ -648,7 +650,7 @@ private:
 		// screen x = (vec.x + 1) * (screen width / 2)
 		// screen y = (-vec.y + 1) * (screeh height / 2)
 
-		// 0.1 is being subtracted from screen width to keep pixels from spilling from the right edge
+		// 0.01 is being subtracted from screen width to keep pixels from spilling from the right edge
 		// of the screen to the left edge of the screen
 
 		// all pixel values must be rounded down (int) to prevent fill gaps
@@ -657,14 +659,14 @@ private:
 		// use depth buffer dimensions because they will always be the same as the render targets dimensions
 		// if it is not null ptr
 
-		Vec2 v1Screen((float)(int)((float)(p1.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.1f) / 2.0f),
-			(float)(int)((-(float)p1.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.1f) / 2)));
+		Vec2 v1Screen((float)(int)((float)(p1.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.01f) / 2.0f),
+			(float)(int)((-(float)p1.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.01f) / 2)));
 
-		Vec2 v2Screen((float)(int)(((float)p2.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.1f) / 2.0f),
-			(float)(int)((-(float)p2.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.1f) / 2)));
+		Vec2 v2Screen((float)(int)(((float)p2.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.01f) / 2.0f),
+			(float)(int)((-(float)p2.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.01f) / 2)));
 
-		Vec2 v3Screen((float)(int)(((float)p3.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.1f) / 2.0f),
-			(float)(int)((-(float)p3.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.1f) / 2)));
+		Vec2 v3Screen((float)(int)(((float)p3.GetPos().x + 1.0f) * ((float)depthBuffer.GetWidth() - 0.01f) / 2.0f),
+			(float)(int)((-(float)p3.GetPos().y + 1.0f) * (float)((depthBuffer.GetHeight() - 0.01f) / 2)));
 
 		// if wireframe mode is enabled, and there is a valid render target
 		if (flags & RF_WIREFRAME && pRenderTarget) {

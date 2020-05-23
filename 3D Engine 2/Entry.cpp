@@ -11,23 +11,25 @@
 
 Window* pWindow = nullptr;
 
+float fov = 90;
+
 Mat4 rotation2 = Mat4::GetRotation(0, 0, 0);
 Mat4 translation2 = Mat4::Get3DTranslation(0, -5, 0);
-Mat4 scale2 = Mat4::GetScale(100, 1, 100);
+Mat4 scale2 = Mat4::GetScale(10, 1, 10);
 
 Frustum projFrustum;
 Mat4 projection;
 Mat4 view;
 
 Vec3 cameraPos(0, 6, 0);
-Vec3 cameraRot(11 * PI / 6, 0, 0);
+Vec3 cameraRot(-PI / 2, 0, 0);
 
 //Vec3 lightDir(0, 0, -1);
 Vec3 lightRot(-PI * 2 / 2.2 + 2 * PI, 0, 0);
 //DirectionalLight dl({ 1, 0, 0 }, lightRot, 2048, 2048);
-SpotLight sl({ 1, 1, 1 }, { 0, 6, 0}, { 11 * PI / 6, 0, 0 }, 1.0f, 0.00f, 0.0f, 1);
+SpotLight sl({ 1, 1, 1 }, { 0, 6, 0}, { 11 * PI / 6, 0, 0 }, 1.0f, 0.00f, 0.0f, 1, 2048, 2048);
 
-Cow cow({0, -2.2, -25}, {0, PI / 4, 0}, {1, 1, 1});
+Cow cow({0, -2.2, -5}, {0, PI / 4, 0}, {1, 1, 1});
 
 Surface texture("images/grass.jpg");
 
@@ -151,13 +153,15 @@ int terrainIndices[6] = {3, 2, 1, 3, 1, 0};
 
 bool RenderLogic(Renderer& renderer, float deltaTime) {
 
-	projection = Mat4::GetPerspectiveProjection(1, 75, -1, 1, (float)pWindow->GetHeight() / pWindow->GetWidth(), -(float)pWindow->GetHeight() / pWindow->GetWidth());
+	projection = Mat4::GetPerspectiveProjection(1, 75, (float)pWindow->GetHeight() / pWindow->GetWidth(), fov, projFrustum);
+
+	/*projection = Mat4::GetPerspectiveProjection(1, 75, -1, 1, (float)pWindow->GetHeight() / pWindow->GetWidth(), -(float)pWindow->GetHeight() / pWindow->GetWidth());
 	projFrustum.near = 1;
 	projFrustum.far = 75;
 	projFrustum.left = -1;
 	projFrustum.right = 1;
 	projFrustum.top = (float)pWindow->GetHeight() / pWindow->GetWidth();
-	projFrustum.bottom = -(float)pWindow->GetHeight() / pWindow->GetWidth();
+	projFrustum.bottom = -(float)pWindow->GetHeight() / pWindow->GetWidth();*/
 
 	int numKeys;
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
@@ -208,10 +212,10 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 	}
 
 	if ( keyboard[SDL_SCANCODE_R] ) {
-		cow.position.y -= deltaTime;
+		fov += 1;
 	}
 	if ( keyboard[SDL_SCANCODE_F] ) {
-		cow.position.y += deltaTime;
+		fov -= 1;
 	}
 
 	if ( keyboard[SDL_SCANCODE_I] ) {
@@ -230,7 +234,8 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 	//sl.UpdateShadowBox(projFrustum, camToWorld);
 
 	//cow.AddToShadowMap(sl);
-	cow.Render(renderer, projection, view, sl, cameraPos);
+	//cow.Render(renderer, projection, view, sl, cameraPos);
+	cb.Render(renderer, Mat4::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z).GetInverse(), projection);
 	
 	//renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
 

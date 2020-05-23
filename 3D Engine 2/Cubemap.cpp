@@ -1,6 +1,6 @@
 #include "Cubemap.h"
 
-#define FAR 50
+#define FAR 25
 
 const int Cubemap::NUM_TRIANGLES = 12;
 
@@ -63,10 +63,10 @@ const Surface* Cubemap::GetPlanes() const {
 	return &posx;
 }
 
-void Cubemap::Render(Renderer& renderer, const Mat4& view, const Mat4& projection) {
+void Cubemap::Render(Renderer& renderer, const Mat4& rotView, const Mat4& projection) {
 
 	this->projection = &projection;
-	this->view = &view;
+	this->view = &rotView;
 
 	boundObject = this;
 
@@ -83,6 +83,8 @@ Cubemap::C_Pixel Cubemap::VertexShader(C_Vertex& vertex) {
 }
 Vec4 Cubemap::PixelShader(C_Pixel& pixel, const Renderer::Sampler<C_Pixel>& sampler) {
 
+	Vec4& dir = pixel.texDirection;
+
 	// this scheme came from LearnOpenGL.com
-	return sampler.SampleCubeMap(boundObject->GetPlanes(), pixel.texDirection.x, pixel.texDirection.y, pixel.texDirection.z);
+	return sampler.SampleCubeMap(boundObject->GetPlanes(), dir.x, dir.y, dir.z);
  }
