@@ -73,6 +73,7 @@ void StartDoubleBufferedInstance(Window& window, EventHandler_T eventHandler, Pr
 
 		Uint64 start = SDL_GetPerformanceCounter();
 
+		//////////////////////// START RENDER BLOCK /////////////////////////////
 		rendering = true;
 
 		//clear the buffer about to be drawn to
@@ -114,19 +115,29 @@ void StartDoubleBufferedInstance(Window& window, EventHandler_T eventHandler, Pr
 				int newWidth = commandQueue.Dequeue();
 				int newHeight = commandQueue.Dequeue();
 
-				// need to resize both screen buffers and the renderer's depth map
+				// need to resize both buffers and the renderer's depth buffer
 				pFrontBuffer->Resize(newWidth, newHeight, false);
 				pBackBuffer->Resize(newWidth, newHeight, false);
 				renderer.GetDepthBuffer().Resize(newWidth, newHeight);
 
 				break;
 			}
+			case C_SET_FLAG:
+				renderer.SetFlags(commandQueue.Dequeue());
+				break;
+			case C_CLEAR_FLAG:
+				renderer.ClearFlags(commandQueue.Dequeue());
+				break;
+			case C_TOGGLE_FLAG:
+				renderer.ToggleFlags(commandQueue.Dequeue());
+				break;
 
 			}
 
 		}
 
 		rendering = false;
+		/////////////////////////// END RENDER BLOCK ////////////////////////////
 
 		Uint64 end = SDL_GetPerformanceCounter();
 		static Uint64 interval = SDL_GetPerformanceFrequency();

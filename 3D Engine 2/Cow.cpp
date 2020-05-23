@@ -9,7 +9,7 @@
 
 #define CAMERA 0
 
-#define SHADOW_SAMPLE 1
+#define SHADOW_SAMPLE 5
 
 #define FILE "models/OBJ/Cow2.obj"
 

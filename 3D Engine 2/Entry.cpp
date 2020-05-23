@@ -15,7 +15,7 @@ float fov = 90;
 
 Mat4 rotation2 = Mat4::GetRotation(0, 0, 0);
 Mat4 translation2 = Mat4::Get3DTranslation(0, -5, 0);
-Mat4 scale2 = Mat4::GetScale(10, 1, 10);
+Mat4 scale2 = Mat4::GetScale(50, 1, 50);
 
 Frustum projFrustum;
 Mat4 projection;
@@ -92,7 +92,7 @@ TestPixel TestVertexShader(TestVertex& vertex) {
 
 Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampler2d) {
 	
-	float fracInShadow = sl.MultiSampleShadowMap(pixel.shadow, 1);
+	float fracInShadow = sl.MultiSampleShadowMap(pixel.shadow, 5);
 	
 
 	//float fracInShadow = 0;
@@ -231,15 +231,15 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	Mat4 camToWorld = view.GetInverse();
 	
-	//sl.UpdateShadowBox(projFrustum, camToWorld);
+	sl.UpdateShadowBox(projFrustum, camToWorld);
 
-	//cow.AddToShadowMap(sl);
-	//cow.Render(renderer, projection, view, sl, cameraPos);
+	cow.AddToShadowMap(sl);
+	cow.Render(renderer, projection, view, sl, cameraPos);
 	cb.Render(renderer, Mat4::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z).GetInverse(), projection);
 	
-	//renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
+	renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
 
-	//sl.ClearShadowMap();
+	sl.ClearShadowMap();
 
 	
 	return false;
@@ -281,6 +281,15 @@ bool EventHandler(Queue<int>& commandQueue)
 				cameraRot.x -= event.motion.yrel * 3.0f / 720;
 				cameraRot.y -= event.motion.xrel * 3.0f / 720;
 
+			}
+
+			break;
+
+		case SDL_KEYDOWN:
+
+			if ( event.key.keysym.scancode == SDL_SCANCODE_J ) {
+				commandQueue.Enqueue(C_TOGGLE_FLAG);
+				commandQueue.Enqueue(RF_WIREFRAME);
 			}
 
 			break;

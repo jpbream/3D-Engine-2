@@ -9,7 +9,10 @@
 
 enum Commands {
 
-	C_RESIZE
+	C_RESIZE,
+	C_SET_FLAG,
+	C_CLEAR_FLAG,
+	C_TOGGLE_FLAG
 
 };
 

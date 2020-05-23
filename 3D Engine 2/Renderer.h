@@ -10,31 +10,24 @@
 
 #define FLOAT_OFFSET(OBJECT, MEMBER) (int)((float*)&OBJECT.MEMBER - (float*)&OBJECT)
 
-#define THREADS (std::thread::hardware_concurrency() - 2) / 2
+#define MAX_SUPPORTED_THREADS 32
+#define NUM_THREADS (std::thread::hardware_concurrency() - 2)
 
-#define X_OFFSET 0
-#define Y_OFFSET 1
-#define Z_OFFSET 2
+#define RF_BACKFACE_CULL 0x2
+#define RF_OUTLINES 0x4
+#define RF_WIREFRAME 0x8
+#define RF_BILINEAR 0x10
+#define RF_MIPMAP 0x20
+#define RF_TRILINEAR 0x40
 
-#define FLAT_TOP 1
-#define FLAT_BOTTOM 2
-
-#define RF_BACKFACE_CULL 0b0000000000000010
-#define RF_OUTLINES 0b0000000000000100
-#define RF_WIREFRAME 0b0000000000001000
-#define RF_BILINEAR 0b0000000000010000
-#define RF_MIPMAP 0b0000000000100000
-#define RF_TRILINEAR 0b0000000001000000
-
-#define THREAD_CUTOFF 15
 #define WRAP_OFFSET 1e-7f
 
 #define RENDERER_DEBUG
 
 #ifdef RENDERER_DEBUG
 #undef NDEBUG
-#include <assert.h>
 #endif
+#include <assert.h>
 
 class Renderer
 {
@@ -435,12 +428,20 @@ private:
 
 	DepthBuffer depthBuffer;
 
-	short flags = 0;
+	// volatile because the main thread could change this while
+	// a renderer thread is working
+	volatile unsigned short flags = 0;
 
-	// don't want to use threads for large models
-	// creating many of them kills performance
-	// they are good for small models that take many pixels
-	bool usingThreads = false;
+	enum {
+		X_OFFSET = 0,
+		Y_OFFSET = 1,
+		Z_OFFSET = 2
+	};
+
+	enum {
+		FLAT_TOP,
+		FLAT_BOTTOM
+	};
 
 	template <class Pixel, typename PSPtr>
 	void ClipAndDrawTriangle(Pixel& p1, Pixel& p2, Pixel& p3, PSPtr PixelShader, int iteration) {
@@ -722,33 +723,15 @@ private:
 		// draw the flat top and flat bottom
 		if (cutScreen.x > middleScreen->x) {
 
-			// cut is on the right
-			if (usingThreads) {
-
-				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>, this, std::ref(*middlePixel), std::ref(*middleScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(cutPixel), std::ref(cutScreen), PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
-				flatBottom.join();
-			}
-			else {
-
-				DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
-			}
-	
+			DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>(*middlePixel, *middleScreen, *topPixel, *topScreen, cutPixel, cutScreen, PixelShader);
+			DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(*middlePixel, *middleScreen, *bottomPixel, *bottomScreen, cutPixel, cutScreen, PixelShader);
+			
 		}
 		else {
 
-			// cut is on the left
-			if (usingThreads) {
-
-				std::thread flatBottom(&Renderer::DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>, this, std::ref(cutPixel), std::ref(cutScreen), std::ref(*topPixel), std::ref(*topScreen), std::ref(*middlePixel), std::ref(*middleScreen), PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
-				flatBottom.join();
-			}
-			else {
-				DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
-				DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
-			}
+			DrawHalfTriangle<FLAT_BOTTOM, Pixel, PSPtr>(cutPixel, cutScreen, *topPixel, *topScreen, *middlePixel, *middleScreen, PixelShader);
+			DrawHalfTriangle<FLAT_TOP, Pixel, PSPtr>(cutPixel, cutScreen, *bottomPixel, *bottomScreen, *middlePixel, *middleScreen, PixelShader);
+			
 		}
 
 		// if outlines mode is enabled and there is a valid render target
@@ -889,73 +872,95 @@ private:
 	bool TestAndSetPixel(int x, int y, float normalizedDepth);
 
 	template <class Vertex, class Pixel, typename VSPtr, typename PSPtr>
-	void _DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VSPtr VertexShader, PSPtr PixelShader) {
-
-#ifdef RENDERER_DEBUG
-
-		//INVARIANTS
-
-		// depth buffer size must equal render target size, if there is a render target
-		assert(!(pRenderTarget != nullptr && (pRenderTarget->GetWidth() != depthBuffer.width || pRenderTarget->GetHeight() != depthBuffer.height)));
-#endif
-
-		std::vector<std::thread> threads;
+	void DEA_Thread(int idxStart, int numIdx, int* indices, Vertex* vertices, VSPtr VertexShader, PSPtr PixelShader)
+	{
+		// holds vertex shader results in case they are needed again
 		std::unordered_map<int, Pixel> processedVertices;
+		processedVertices.reserve(numIdx * 3);
 
-		// creating many many threads seems to cause major lag
-		// so only use threads for models with a few large triangles
-		if (numIndexGroups < THREAD_CUTOFF)
-			usingThreads = true;
-
-		for (int i = 0; i < numIndexGroups; ++i) {
+		// loop through all triangles assigned to this thread
+		for ( int i = idxStart; i < idxStart + numIdx; ++i ) {
 
 			int i1 = indices[i * 3];
 			int i2 = indices[i * 3 + 1];
 			int i3 = indices[i * 3 + 2];
 
 			// run the vertex shaders or look up the vertex if it has already been run
-			if (!processedVertices.count(i1)) {
+			if ( !processedVertices.count(i1) ) {
 				processedVertices.emplace(i1, VertexShader(vertices[i1]));
 			}
-			if (!processedVertices.count(i2)) {
+			if ( !processedVertices.count(i2) ) {
 				processedVertices.emplace(i2, VertexShader(vertices[i2]));
 			}
-			if (!processedVertices.count(i3)) {
+			if ( !processedVertices.count(i3) ) {
 				processedVertices.emplace(i3, VertexShader(vertices[i3]));
 			}
 
-			// clear out any threads that have already finished
-			auto it = threads.begin();
-			while (it != threads.end()) {
+			// draw the triangle
+			ClipAndDrawTriangle<Pixel, PSPtr>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
 
-				if (!it->joinable()) {
-					it = threads.erase(it);
+		}
+	}
 
-				}
-				else {
-					++it;
-				}
+	template <class Vertex, class Pixel, typename VSPtr, typename PSPtr>
+	void DEA_Launcher(int numIndexGroups, int* indices, Vertex* vertices, VSPtr VertexShader, PSPtr PixelShader) {
 
-			}
+		//INVARIANTS
 
-			// if we have enough resources to draw this triangle in a new thread, do so
-			if (threads.size() < THREADS && usingThreads) {
+		// depth buffer size must equal render target size, if there is a render target
+		assert(!(pRenderTarget != nullptr && (pRenderTarget->GetWidth() != depthBuffer.width || pRenderTarget->GetHeight() != depthBuffer.height)));
 
-				threads.emplace_back(&Renderer::ClipAndDrawTriangle<Pixel, PSPtr>, this, std::ref(processedVertices[i1]), std::ref(processedVertices[i2]), std::ref(processedVertices[i3]), PixelShader, 0);
+		// in case someone has a processor from another planet
+		assert(NUM_THREADS <= MAX_SUPPORTED_THREADS);
 
-			}
-			else {
-				ClipAndDrawTriangle<Pixel, PSPtr>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
-			}
 
+
+		if ( NUM_THREADS > 0 ) {
+
+			// will store all threads that get created
+			std::thread threads[MAX_SUPPORTED_THREADS];
+			int threadsUsed = 0;
+
+			// how many triangles each thread will be drawing, split equally
+			int idxRange = numIndexGroups / NUM_THREADS;
+
+			// use each thread, and tell it to draw its share of the triangles
+			for ( int i = 0; i < NUM_THREADS * idxRange; i += idxRange )
+				threads[threadsUsed++] = 
+				std::thread(
+					&Renderer::DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>, 
+					this, 
+					i, 
+					idxRange,
+					indices, 
+					vertices, 
+					VertexShader, 
+					PixelShader
+				);
+
+			// the leftover triangles (division remainder) will be drawn on this thread
+			DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>
+				(
+					numIndexGroups - (numIndexGroups % NUM_THREADS), 
+					numIndexGroups % NUM_THREADS, 
+					indices, 
+					vertices, 
+					VertexShader, 
+					PixelShader
+				);
+
+			// clean up the threads
+			for ( std::thread* t = threads; t < threads + threadsUsed; ++t )
+				t->join();
+			
+		}
+		else {
+
+			// if there are no threads, draw the whole model in a single draw call
+			DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>(0, numIndexGroups, indices, vertices, VertexShader, PixelShader);
 
 		}
 
-		// wait for all threads to finish before returning
-		for (unsigned int i = 0u; i < threads.size(); i++)
-			threads[i].join();
-
-		usingThreads = false;
 	}
 
 public:
@@ -969,8 +974,14 @@ public:
 	template <class Vertex, class Pixel>
 	void DrawElementArray(int numIndexGroups, int* indices, Vertex* vertices, VS_TYPE<Vertex, Pixel> VertexShader, PS_TYPE<Pixel> PixelShader) {
 
-		_DrawElementArray<Vertex, Pixel, VS_TYPE<Vertex, Pixel>, PS_TYPE<Pixel>>(numIndexGroups, indices, vertices, VertexShader, PixelShader);
-
+		DEA_Launcher<Vertex, Pixel, VS_TYPE<Vertex, Pixel>, PS_TYPE<Pixel>>
+			(
+				numIndexGroups, 
+				indices, 
+				vertices, 
+				VertexShader, 
+				PixelShader
+			);
 	}
 
 	DepthBuffer& GetDepthBuffer();
@@ -979,6 +990,7 @@ public:
 
 	void SetFlags(short flags);
 	void ClearFlags(short flags);
+	void ToggleFlags(short flags);
 	bool TestFlags(short flags) const;
 
 	Surface& GetRenderTarget();

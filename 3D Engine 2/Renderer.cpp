@@ -63,6 +63,11 @@ void Renderer::ClearFlags(short flags) {
 
 }
 
+void Renderer::ToggleFlags(short flags)
+{
+	this->flags ^= flags;
+}
+
 bool Renderer::TestFlags(short flags) const {
 
 	return this->flags & flags;

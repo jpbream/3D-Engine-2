@@ -4,8 +4,8 @@
 
 #ifdef QUEUE_DEBUG
 #undef NDEBUG
-#include <assert.h>
 #endif
+#include <assert.h>
 
 #define SIZE 256
 
@@ -28,33 +28,24 @@ public:
 
 	void Enqueue(T value)
 	{
-#ifdef QUEUE_DEBUG
-
 		// checks that the array is not out of space
 		assert(back % SIZE != front % SIZE || back == front);
-#endif
 
 		data[back++ % SIZE] = value;
 	}
 
 	T Dequeue()
 	{
-#ifdef QUEUE_DEBUG
-
 		// checks that there is data in the array
 		assert(front != back);
-#endif
 
 		return data[front++ % SIZE];
 	}
 
 	T Peek()
 	{
-#ifdef QUEUE_DEBUG
-
 		// checks that there is data in the array
 		assert(front != back);
-#endif
 
 		return data[front % SIZE];
 	}

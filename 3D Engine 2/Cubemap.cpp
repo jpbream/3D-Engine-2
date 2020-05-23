@@ -1,6 +1,6 @@
 #include "Cubemap.h"
 
-#define FAR 25
+#define FAR 74
 
 const int Cubemap::NUM_TRIANGLES = 12;
 
