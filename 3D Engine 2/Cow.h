@@ -13,10 +13,9 @@ private:
 	public:
 		Vec4 position;
 		Vec3 normal;
-		Vec2 texel;
 
 		CowVertex();
-		CowVertex(const Vec4& position, const Vec3& normal, const Vec2& texel);
+		CowVertex(const Vec4& position, const Vec3& normal);
 	};
 
 	class CowPixel : public Renderer::PixelShaderInput {
@@ -24,7 +23,6 @@ private:
 		Vec4 position;
 		Vec3 normal;
 		Vec3 worldPos;
-		Vec2 texel;
 		Vec3 shadow;
 
 		CowPixel();

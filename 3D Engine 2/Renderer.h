@@ -4,11 +4,9 @@
 #include "Vec3.h"
 #include "Vec4.h"
 #include "Mat4.h"
+#include "Utility.h"
 #include <unordered_map>
 #include <thread>
-#include <vector>
-
-#define FLOAT_OFFSET(OBJECT, MEMBER) (int)((float*)&OBJECT.MEMBER - (float*)&OBJECT)
 
 #define MAX_SUPPORTED_THREADS 32
 #define NUM_THREADS (std::thread::hardware_concurrency() - 2)
@@ -20,8 +18,6 @@
 #define RF_MIPMAP 0x20
 #define RF_TRILINEAR 0x40
 
-#define WRAP_OFFSET 1e-7f
-
 #define RENDERER_DEBUG
 
 #ifdef RENDERER_DEBUG
@@ -31,39 +27,6 @@
 
 class Renderer
 {
-
-private:
-
-	template <class Pixel>
-	static Pixel Lerp(const Pixel& p1, const Pixel& p2, float alpha) {
-
-		// do not use this for small objects, it will be outperformed by the operator overloads
-
-		constexpr short NUMFLOATS = sizeof(Pixel) / sizeof(float);
-		float buf[NUMFLOATS];
-
-		for (int i = 0; i < NUMFLOATS; ++i)
-			*(buf + i) = *((float*)&p1 + i) * (1 - alpha) + *((float*)&p2 + i) * alpha;
-
-
-		return *(Pixel*)buf;
-	}
-
-	template <class Pixel>
-	static Pixel Mult(const Pixel& p, float s) {
-
-		// do not use this for small objects, it will be outperformed by the operator overloads
-
-		constexpr short NUMFLOATS = sizeof(Pixel) / sizeof(float);
-		float buf[NUMFLOATS];
-
-		for (int i = 0; i < NUMFLOATS; ++i)
-			*(buf + i) = *((float*)&p + i) * s;
-
-
-		return *(Pixel*)buf;
-
-	}
 
 public:
 
@@ -155,6 +118,17 @@ public:
 		std::unordered_map<int, Pixel> aboveLookup;
 
 		mutable bool newScanline = true;
+
+		enum {
+			POSX = 0,
+			NEGX = 1,
+			POSY = 2,
+			NEGY = 3,
+			POSZ = 4,
+			NEGZ = 5
+		};
+
+		const float WRAP_OFFSET = 1e-7f;
 
 		Pixel GetInterpolatedPixel(int x, int y) const {
 
@@ -365,14 +339,14 @@ public:
 
 				if ( s > 0 ) {
 					// positive x
-					surfaceToSample = &planes[0];
+					surfaceToSample = &planes[POSX];
 					finalS = 0.5f - p / (2 * s);
 					finalT = 0.5f - t / (2 * s);
 
 				}
 				else {
 					// negative x
-					surfaceToSample = &planes[1];
+					surfaceToSample = &planes[NEGX];
 					finalS = 0.5f - p / (2 * s);
 					finalT = 0.5f + t / (2 * s);
 				}
@@ -382,13 +356,13 @@ public:
 
 				if ( t > 0 ) {
 					// positive y
-					surfaceToSample = &planes[2];
+					surfaceToSample = &planes[POSY];
 					finalS = 0.5f + s / (2 * t);
 					finalT = 0.5f + p / (2 * t);
 				}
 				else {
 					// negative y
-					surfaceToSample = &planes[3];
+					surfaceToSample = &planes[NEGY];
 					finalS = 0.5f - s / (2 * t);
 					finalT = 0.5f + p / (2 * t);
 				}
@@ -398,13 +372,13 @@ public:
 
 				if ( p > 0 ) {
 					// positive z
-					surfaceToSample = &planes[4];
+					surfaceToSample = &planes[POSZ];
 					finalS = 0.5f + s / (2 * p);
 					finalT = 0.5f - t / (2 * p);
 				}
 				else {
 					// negative z
-					surfaceToSample = &planes[5];
+					surfaceToSample = &planes[NEGZ];
 					finalS = 0.5f + s / (2 * p);
 					finalT = 0.5f + t / (2 * p);
 				}
@@ -443,6 +417,15 @@ private:
 		FLAT_BOTTOM
 	};
 
+	enum {
+		NEAR,
+		FAR,
+		LEFT,
+		RIGHT,
+		BOTTOM,
+		TOP
+	};
+
 	template <class Pixel, typename PSPtr>
 	void ClipAndDrawTriangle(Pixel& p1, Pixel& p2, Pixel& p3, PSPtr PixelShader, int iteration) {
 
@@ -455,37 +438,37 @@ private:
 	
 		switch (iteration) {
 
-		case 0:
+		case NEAR:
 			//clipping against near plane
 			memberVariableOffset = Z_OFFSET;
 			signOfPlane = 1;
 			break;
 
-		case 1:
+		case FAR:
 			// clipping against the far plane
 			memberVariableOffset = Z_OFFSET;
 			signOfPlane = -1;
 			break;
 
-		case 2:
+		case LEFT:
 			// clipping aginst the left plane
 			memberVariableOffset = X_OFFSET;
 			signOfPlane = 1;
 			break;
 
-		case 3:
+		case RIGHT:
 			// clipping against the right plane
 			memberVariableOffset = X_OFFSET;
 			signOfPlane = -1;
 			break;
 
-		case 4:
+		case BOTTOM:
 			// clipping against the bottom plane
 			memberVariableOffset = Y_OFFSET;
 			signOfPlane = 1;
 			break;
 
-		case 5:
+		case TOP:
 			// clipping against the top plane
 			memberVariableOffset = Y_OFFSET;
 			signOfPlane = -1;
@@ -897,7 +880,7 @@ private:
 			}
 
 			// draw the triangle
-			ClipAndDrawTriangle<Pixel, PSPtr>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, 0);
+			ClipAndDrawTriangle<Pixel, PSPtr>(processedVertices[i1], processedVertices[i2], processedVertices[i3], PixelShader, NEAR);
 
 		}
 	}

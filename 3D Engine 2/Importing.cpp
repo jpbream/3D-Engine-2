@@ -202,7 +202,10 @@ Scene::Scene(const std::string& filepath)
 	:
 	directory(filepath.substr(0, filepath.find_last_of("/") + 1))
 {
-	ai_scene = ai_importer.ReadFile(filepath, aiProcess_Triangulate);
+	ai_scene = ai_importer.ReadFile(filepath, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+
+	if ( ai_scene == nullptr )
+		std::cout << ai_importer.GetErrorString() << std::endl;
 }
 
 int Scene::NumMeshes() const

@@ -8,6 +8,7 @@
 #include "Light.h"
 #include "Cow.h"
 #include "Queue.h"
+#include "Utility.h"
 
 Window* pWindow = nullptr;
 
@@ -15,7 +16,7 @@ float fov = 90;
 
 Mat4 rotation2 = Mat4::GetRotation(0, 0, 0);
 Mat4 translation2 = Mat4::Get3DTranslation(0, -5, 0);
-Mat4 scale2 = Mat4::GetScale(50, 1, 50);
+Mat4 scale2 = Mat4::GetScale(15, 1, 15);
 
 Frustum projFrustum;
 Mat4 projection;
@@ -24,14 +25,12 @@ Mat4 view;
 Vec3 cameraPos(0, 6, 0);
 Vec3 cameraRot(-PI / 2, 0, 0);
 
-//Vec3 lightDir(0, 0, -1);
-Vec3 lightRot(-PI * 2 / 2.2 + 2 * PI, 0, 0);
 //DirectionalLight dl({ 1, 0, 0 }, lightRot, 2048, 2048);
-SpotLight sl({ 1, 1, 1 }, { 0, 6, 0}, { 11 * PI / 6, 0, 0 }, 1.0f, 0.00f, 0.0f, 1, 2048, 2048);
+SpotLight sl({ 1, 1, 1 }, { 0, 0, 10}, { 0, 0, 0 }, 1.0f, 0.00f, 0.0f, 6, 2048, 2048);
 
 Cow cow({0, -2.2, -5}, {0, PI / 4, 0}, {1, 1, 1});
 
-Surface texture("images/grass.jpg");
+Surface texture("images/norm.png");
 
 Cubemap cb("cube/posx.jpg", 
 	"cube/negx.jpg", 
@@ -48,6 +47,8 @@ public:
 	Vec4 position;
 	Vec3 normal;
 	Vec2 texel;
+	Vec3 tangent;
+	Vec3 bitangent;
 
 	TestVertex() {}
 	TestVertex(const Vec4& position, const Vec3& normal, const Vec2& texel) : position(position), normal(normal), texel(texel) {}
@@ -62,6 +63,8 @@ public:
 	Vec3 worldPos;
 	Vec2 texel;
 	Vec3 shadow;
+	Vec3 toCam;
+	Vec3 toLight;
 
 	TestPixel() {}
 	TestPixel(const Vec4& v, const Vec3& normal) : position(v), normal(normal) {}
@@ -79,12 +82,24 @@ TestPixel TestVertexShader(TestVertex& vertex) {
 
 	TestPixel tp(thing, norm);
 	tp.worldPos = Vec3(worldPos.x, worldPos.y, worldPos.z);
-	tp.texel = vertex.texel * 25;
+	tp.texel = vertex.texel;
 
 	Mat4 mObject = translation2 * rotation2 * scale2;
 
 	Vec4 s = Mat4::Viewport * sl.WorldToShadowMatrix() * mObject * vertex.position;
 	tp.shadow = { s.s, s.t, s.p };
+
+	// get the to cam and to light vectors in OBJECT space
+	tp.toCam = ((translation2 * rotation2 * scale2).GetInverse() * (cameraPos.Vec4() - worldPos)).Vec3();
+	tp.toLight = (rotation2.GetInverse() * sl.GetDirection().Vec4()).Vec3();
+
+	// then transform them to tangent space
+	Mat3 objToTan(vertex.tangent, vertex.bitangent, vertex.normal);
+	objToTan = objToTan.GetTranspose();
+
+	tp.toCam = objToTan * tp.toCam;
+	tp.toLight = objToTan * tp.toLight;
+
 
 	return tp;
 
@@ -94,29 +109,42 @@ Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampl
 	
 	float fracInShadow = sl.MultiSampleShadowMap(pixel.shadow, 5);
 	
+	Vec4 normSample = sampler2d.SampleTex2D(texture, FLOAT_OFFSET(pixel, texel));
+	normSample *= 2;
+	normSample -= Vec4(1, 1, 1, 1);
 
-	//float fracInShadow = 0;
-	//float compDepth = dl.SampleShadowMap(pixel.shadow.s, pixel.shadow.t);
-	//if (pixel.shadow.p > compDepth + 0.01)
-		//fracInShadow = 1;
-	
-	//Vec3 col = dl.GetColorAt(pixel.normal.Normalized());
-	Vec3 col = sl.GetColorAt(pixel.worldPos);
+	Vec3 lightCol = sl.GetColorAt(pixel.worldPos);
 
-	col.r -= fracInShadow * 0.1f;
-	col.g -= fracInShadow * 0.1f;
-	col.b -= fracInShadow * 0.1f;
+	// how much the surface faces the light
+	float facingFactor = Light::FacingFactor(sl.GetDirection(), normSample.Vec3());
 
-	if (col.r < 0) col.r = 0;
-	if (col.g < 0) col.g = 0;
-	if (col.b < 0) col.b = 0;
+	pixel.toCam = pixel.toCam.Normalized();
+	pixel.toLight = pixel.toLight.Normalized();
 
-	return { col.r, col.g, col.b, 1 };
-	
-	//Vec3 reflect = toCam.Reflect(pixel.normal);
+	// spec factor is how much to scale the specular color by
+	float specFactor = Light::SpecularFactor(pixel.toLight, normSample.Vec3(), pixel.toCam, 15);
 
-	//Vec4 col = sampler2d.SampleTex2D(texture, 11);
-	//return { col.r * dot, col.g * dot, col.b * dot, 1 };
+	// the colors based on the materials surface properties
+	// diffuse, specular (specular color will be the light color)
+	Vec3 nonLightCol = Vec3(1, 1, 1) * facingFactor + sl.GetColor() * specFactor;
+
+	// final non ambient color is the color of the light modulated with
+	// the colors not contributed by the light
+	Vec3 nonAmbientColor = Vec3::Modulate(
+		lightCol,
+		nonLightCol
+	);
+
+	// darken area if it is in shadow
+	nonAmbientColor.r -= fracInShadow * 0.1f;
+	nonAmbientColor.g -= fracInShadow * 0.1f;
+	nonAmbientColor.b -= fracInShadow * 0.1f;
+
+	// ambient and emmissive color would be added to this
+	Vec3 finalColor = nonAmbientColor;
+
+	finalColor.Clamp();
+	return finalColor.Vec4();
 
 }
 
@@ -166,15 +194,13 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 	int numKeys;
 	const Uint8* keyboard = SDL_GetKeyboardState(&numKeys);
 
-	cow.rotation.y += 1 * deltaTime;
-
 	if ( keyboard[SDL_SCANCODE_Q] ) {
 		cow.rotation.y += 0.1;
-		lightRot.r += deltaTime;
+		rotation2 = Mat4::GetRotation(-.2, 0, 0) * rotation2;
 	}
 	if ( keyboard[SDL_SCANCODE_E] ) {
 		cow.rotation.y -= 0.1;
-		lightRot.r -= deltaTime;
+		rotation2 = Mat4::GetRotation(.2, 0, 0) * rotation2;
 	}
 	if ( keyboard[SDL_SCANCODE_W] ) {
 
@@ -231,15 +257,15 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	Mat4 camToWorld = view.GetInverse();
 	
-	sl.UpdateShadowBox(projFrustum, camToWorld);
+	//sl.UpdateShadowBox(projFrustum, camToWorld);
 
-	cow.AddToShadowMap(sl);
-	cow.Render(renderer, projection, view, sl, cameraPos);
-	cb.Render(renderer, Mat4::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z).GetInverse(), projection);
+	//cow.AddToShadowMap(sl);
+	//cow.Render(renderer, projection, view, sl, cameraPos);
+	//cb.Render(renderer, Mat4::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z).GetInverse(), projection);
 	
 	renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
 
-	sl.ClearShadowMap();
+	//sl.ClearShadowMap();
 
 	
 	return false;
@@ -320,6 +346,16 @@ int main(int argc, char* argv[]) {
 	texture.GenerateMipMaps();
 	
 	Instance::Init();
+
+	CalculateNormals(2, terrainIndices, 4, terrainVerts, FLOAT_OFFSET(terrainVerts[0], position), FLOAT_OFFSET(terrainVerts[0], normal));
+	CalculateTangentsAndBitangents(
+		2, terrainIndices, 4, terrainVerts,
+		FLOAT_OFFSET(terrainVerts[0], position),
+		FLOAT_OFFSET(terrainVerts[0], texel),
+		FLOAT_OFFSET(terrainVerts[0], normal),
+		FLOAT_OFFSET(terrainVerts[0], tangent),
+		FLOAT_OFFSET(terrainVerts[0], bitangent)
+	);
 
 	//texture.GenerateMipMaps();
 	//texture.Tint({ 1, 0, 0, 1 }, 0.2);

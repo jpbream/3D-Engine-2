@@ -1,6 +1,7 @@
 #include "Cow.h"
 #include "Mat3.h"
 #include "Importing.h"
+#include "Utility.h"
 
 #define MODEL 0
 #define MVP 1
@@ -30,7 +31,6 @@ Cow::CowPixel Cow::MainVertexShader(CowVertex& vertex)
 	tp.position = hcs;
 	tp.normal = norm;
 	tp.worldPos = (boundMatrices[MODEL] * vertex.position).Vec3();
-	tp.texel = vertex.texel;
 
 	// the shadow map coordinate in viewport space
 	Vec4 s = Mat4::Viewport * boundMatrices[SHADOW] * boundMatrices[MODEL] * vertex.position;
@@ -48,13 +48,13 @@ Vec4 Cow::MainPixelShader(CowPixel& pixel, const Renderer::Sampler<CowPixel>& sa
 	Vec3 lightCol = boundLight->GetColorAt(pixel.worldPos);
 
 	// how much the surface faces the light
-	float facingFactor = boundLight->FacingFactor(pixel.normal.Normalized());
+	float facingFactor = Light::FacingFactor(boundLight->GetDirection(), pixel.normal.Normalized());
 
 	Vec3 normal = pixel.normal.Normalized();
 	Vec3 toCamera = (boundVectors[CAMERA] - pixel.worldPos).Normalized();
 	
 	// spec factor is how much to scale the specular color by
-	float specFactor = boundLight->SpecularFactor(pixel.worldPos, normal, toCamera, 15);
+	float specFactor = Light::SpecularFactor((boundLight->GetPosition() - pixel.worldPos).Normalized(), normal, toCamera, 15);
 
 	// the colors based on the materials surface properties
 	// diffuse, specular (specular color will be the light color)
@@ -104,6 +104,7 @@ Cow::Cow(const Vec3& position, const Vec3& rotation, const Vec3& scale)
 	Mesh mesh = scene.MeshAt(0);
 
 	nTriangles = mesh.NumTriangles();
+	std::cout << mesh.NumVertices() << std::endl;
 	pIndices = new int[nTriangles * 3];
 
 	// read indices
@@ -117,7 +118,7 @@ Cow::Cow(const Vec3& position, const Vec3& rotation, const Vec3& scale)
 		Vec4 pos = mesh.Positions(i).Vec4();
 		Vec3 norm = mesh.Normals(i);
 
-		pVertices[i] = { pos, norm, {0, 0} };
+		pVertices[i] = { pos, norm};
 	}
 }
 
@@ -178,9 +179,9 @@ Cow::CowVertex::CowVertex()
 {
 }
 
-Cow::CowVertex::CowVertex(const Vec4& position, const Vec3& normal, const Vec2& texel)
+Cow::CowVertex::CowVertex(const Vec4& position, const Vec3& normal)
 	:
-	position(position), normal(normal), texel(texel)
+	position(position), normal(normal)
 {
 }
 

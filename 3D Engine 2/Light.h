@@ -6,6 +6,12 @@
 #include "Mat4.h"
 #include "Vec3.h"
 
+namespace Light {
+
+	float FacingFactor(const Vec3& lightDirection, const Vec3& surfaceNormal);
+	float SpecularFactor(const Vec3& toLight, const Vec3& surfaceNormal, const Vec3& toCamera, float specularExponent);
+}
+
 class DirectionalLight {
 
 private:
@@ -27,8 +33,7 @@ public:
 	const Vec3& GetColor() const;
 	const Vec3& GetRotation() const;
 
-	float FacingFactor(const Vec3& surfaceNormal) const;
-	float SpecularFactor(const Vec3& surfaceNormal, const Vec3& toCamera, float specularExponent) const;
+	const Vec3& GetDirection() const;
 
 	void SetColor(const Vec3& color);
 	void SetRotation(const Vec3& rotation);
@@ -84,9 +89,9 @@ public:
 	const Vec3& GetPosition() const;
 	const Vec3& GetRotation() const;
 
+	const Vec3& GetDirection() const;
+
 	Vec3 GetColorAt(const Vec3& position) const;
-	float FacingFactor(const Vec3& surfaceNormal) const;
-	float SpecularFactor(const Vec3& worldPosition, const Vec3& surfaceNormal, const Vec3& toCamera, float specularExponent) const;
 
 	void SetColor(const Vec3& color);
 	void SetPosition(const Vec3& position);
