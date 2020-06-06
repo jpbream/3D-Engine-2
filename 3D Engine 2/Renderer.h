@@ -898,7 +898,9 @@ private:
 
 
 
-		if ( NUM_THREADS > 0 ) {
+		if ( NUM_THREADS <= numIndexGroups ) {
+
+			// each thread will get more than one triangle
 
 			// will store all threads that get created
 			std::thread threads[MAX_SUPPORTED_THREADS];
@@ -908,18 +910,19 @@ private:
 			int idxRange = numIndexGroups / NUM_THREADS;
 
 			// use each thread, and tell it to draw its share of the triangles
-			for ( int i = 0; i < NUM_THREADS * idxRange; i += idxRange )
-				threads[threadsUsed++] = 
-				std::thread(
-					&Renderer::DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>, 
-					this, 
-					i, 
-					idxRange,
-					indices, 
-					vertices, 
-					VertexShader, 
-					PixelShader
-				);
+			for ( int i = 0; i < NUM_THREADS * idxRange; i += idxRange ) {
+				threads[threadsUsed++] =
+					std::thread(
+						&Renderer::DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>,
+						this,
+						i,
+						idxRange,
+						indices,
+						vertices,
+						VertexShader,
+						PixelShader
+					);
+			}
 
 			// the leftover triangles (division remainder) will be drawn on this thread
 			DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>
@@ -936,6 +939,45 @@ private:
 			for ( std::thread* t = threads; t < threads + threadsUsed; ++t )
 				t->join();
 			
+		}
+		else if ( NUM_THREADS > 0 ) {
+
+			// each thread will get at most one triangle
+
+			// will store all threads that get created
+			std::thread threads[MAX_SUPPORTED_THREADS];
+			int threadsUsed = 0;
+
+			// send a single triangle to each thread 
+			for ( int i = 0; i < numIndexGroups - 1; ++i ) {
+				threads[threadsUsed++] =
+					std::thread(
+						&Renderer::DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>,
+						this,
+						i,
+						1,
+						indices,
+						vertices,
+						VertexShader,
+						PixelShader
+					);
+			}
+
+			// draw the last triangle on this thread
+			DEA_Thread<Vertex, Pixel, VSPtr, PSPtr>
+				(
+					numIndexGroups - 1,
+					1,
+					indices,
+					vertices,
+					VertexShader,
+					PixelShader
+					);
+
+			// clean up the threads
+			for ( std::thread* t = threads; t < threads + threadsUsed; ++t )
+				t->join();
+
 		}
 		else {
 

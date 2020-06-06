@@ -2,6 +2,8 @@
 #include "Mat2.h"
 #include "Vec3.h"
 
+#include <immintrin.h>
+
 #define FLOAT_OFFSET(OBJECT, MEMBER) (int)((float*)&OBJECT.MEMBER - (float*)&OBJECT)
 
 template <class FloatType>
@@ -11,11 +13,32 @@ static FloatType Lerp(const FloatType& p1, const FloatType& p2, float alpha)
 	// do not use this for small objects, it will be outperformed by the operator overloads
 
 	constexpr short NUMFLOATS = sizeof(FloatType) / sizeof(float);
-	float buf[NUMFLOATS];
+	float alignas(32) buf[NUMFLOATS];
 
-	for ( int i = 0; i < NUMFLOATS; ++i )
-		buf[i] = *((float*)&p1 + i) * (1 - alpha) + *((float*)&p2 + i) * alpha;
+	if constexpr ( NUMFLOATS % 8 == 0 ) {
 
+		__m256 first = _mm256_set1_ps(alpha);
+		__m256 second = _mm256_set1_ps(1 - alpha);
+
+		for ( int i = 0; i < NUMFLOATS / 8; ++i ) {
+
+			__m256 vec1 = _mm256_load_ps((float*)&p1 + i * 8);
+			__m256 vec2 = _mm256_load_ps((float*)&p1 + i * 8);
+
+			vec1 = _mm256_mul_ps(vec1, first);
+			vec2 = _mm256_mul_ps(vec2, second);
+
+			__m256 result = _mm256_add_ps(vec1, vec2);
+
+			_mm256_store_ps(buf + i * 8, result);
+		}
+
+	}
+	else {
+
+		for ( int i = 0; i < NUMFLOATS; ++i )
+			buf[i] = *((float*)&p1 + i) * (1 - alpha) + *((float*)&p2 + i) * alpha;
+	}
 
 	return *(FloatType*)buf;
 }

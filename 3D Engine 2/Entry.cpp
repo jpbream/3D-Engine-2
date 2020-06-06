@@ -22,13 +22,13 @@ Frustum projFrustum;
 Mat4 projection;
 Mat4 view;
 
-Vec3 cameraPos(0, 6, 0);
+Vec3 cameraPos(0, 6, 20);
 Vec3 cameraRot(-PI / 2, 0, 0);
 
 //DirectionalLight dl({ 1, 0, 0 }, lightRot, 2048, 2048);
-SpotLight sl({ 1, 1, 1 }, { 0, 0, 10}, { 0, 0, 0 }, 1.0f, 0.00f, 0.0f, 6, 2048, 2048);
+SpotLight sl({ 1, 1, 1 }, { 0, 0, 25}, { 0, 0, 0 }, 1.0f, 0.00f, 0.0f, 6, 2048, 2048);
 
-Cow cow({0, -2.2, -5}, {0, PI / 4, 0}, {1, 1, 1});
+Cow cow({0, 0, 15}, {0, PI / 4, 0}, {1, 1, 1});
 
 Surface texture("images/norm.png");
 
@@ -50,6 +50,8 @@ public:
 	Vec3 tangent;
 	Vec3 bitangent;
 
+	float padding = 0;
+
 	TestVertex() {}
 	TestVertex(const Vec4& position, const Vec3& normal, const Vec2& texel) : position(position), normal(normal), texel(texel) {}
 
@@ -66,6 +68,8 @@ public:
 	Vec3 toCam;
 	Vec3 toLight;
 
+	float padding[3];
+
 	TestPixel() {}
 	TestPixel(const Vec4& v, const Vec3& normal) : position(v), normal(normal) {}
 
@@ -74,6 +78,8 @@ public:
 	}
 
 };
+
+Vec3 lightD;
 TestPixel TestVertexShader(TestVertex& vertex) {
 
 	Vec4 worldPos = translation2 * rotation2 * scale2 * vertex.position;
@@ -89,9 +95,12 @@ TestPixel TestVertexShader(TestVertex& vertex) {
 	Vec4 s = Mat4::Viewport * sl.WorldToShadowMatrix() * mObject * vertex.position;
 	tp.shadow = { s.s, s.t, s.p };
 
-	// get the to cam and to light vectors in OBJECT space
+	// get the to cam and to light and lightDirection vectors in OBJECT space
 	tp.toCam = ((translation2 * rotation2 * scale2).GetInverse() * (cameraPos.Vec4() - worldPos)).Vec3();
-	tp.toLight = (rotation2.GetInverse() * sl.GetDirection().Vec4()).Vec3();
+	tp.toLight = ((translation2 * rotation2 * scale2).GetInverse() * (sl.GetPosition().Vec4() - worldPos)).Vec3();
+	//tp.toLight = (rotation2.GetInverse() * sl.GetPosition().Vec4()).Vec3();
+
+	lightD = (rotation2.GetInverse() * sl.GetDirection().Vec4()).Vec3();
 
 	// then transform them to tangent space
 	Mat3 objToTan(vertex.tangent, vertex.bitangent, vertex.normal);
@@ -100,6 +109,8 @@ TestPixel TestVertexShader(TestVertex& vertex) {
 	tp.toCam = objToTan * tp.toCam;
 	tp.toLight = objToTan * tp.toLight;
 
+	lightD = objToTan * lightD;
+	lightD = lightD.Normalized();
 
 	return tp;
 
@@ -116,13 +127,17 @@ Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampl
 	Vec3 lightCol = sl.GetColorAt(pixel.worldPos);
 
 	// how much the surface faces the light
-	float facingFactor = Light::FacingFactor(sl.GetDirection(), normSample.Vec3());
+	float facingFactor = Light::FacingFactor(lightD, normSample.Vec3());
 
 	pixel.toCam = pixel.toCam.Normalized();
 	pixel.toLight = pixel.toLight.Normalized();
 
 	// spec factor is how much to scale the specular color by
-	float specFactor = Light::SpecularFactor(pixel.toLight, normSample.Vec3(), pixel.toCam, 15);
+	float specFactor = Light::SpecularFactor(pixel.toLight, normSample.Vec3(), pixel.toCam, 35);
+
+	if ( fracInShadow > 0 )
+		specFactor = 0;
+
 
 	// the colors based on the materials surface properties
 	// diffuse, specular (specular color will be the light color)
@@ -136,9 +151,9 @@ Vec4 TestPixelShader(TestPixel& pixel, const Renderer::Sampler<TestPixel>& sampl
 	);
 
 	// darken area if it is in shadow
-	nonAmbientColor.r -= fracInShadow * 0.1f;
-	nonAmbientColor.g -= fracInShadow * 0.1f;
-	nonAmbientColor.b -= fracInShadow * 0.1f;
+	nonAmbientColor.r -= fracInShadow * 0.3f;
+	nonAmbientColor.g -= fracInShadow * 0.3f;
+	nonAmbientColor.b -= fracInShadow * 0.3f;
 
 	// ambient and emmissive color would be added to this
 	Vec3 finalColor = nonAmbientColor;
@@ -257,15 +272,16 @@ bool RenderLogic(Renderer& renderer, float deltaTime) {
 
 	Mat4 camToWorld = view.GetInverse();
 	
-	//sl.UpdateShadowBox(projFrustum, camToWorld);
+	sl.UpdateShadowBox(projFrustum, camToWorld);
 
-	//cow.AddToShadowMap(sl);
-	//cow.Render(renderer, projection, view, sl, cameraPos);
+	cow.AddToShadowMap(sl);
+
+	cow.Render(renderer, projection, view, sl, cameraPos);
 	//cb.Render(renderer, Mat4::GetRotation(cameraRot.x, cameraRot.y, cameraRot.z).GetInverse(), projection);
 	
 	renderer.DrawElementArray<TestVertex, TestPixel>(2, terrainIndices, terrainVerts, TestVertexShader, TestPixelShader);
 
-	//sl.ClearShadowMap();
+	sl.ClearShadowMap();
 
 	
 	return false;
@@ -340,6 +356,17 @@ bool EventHandler(Queue<int>& commandQueue)
 
 
 int main(int argc, char* argv[]) {
+
+	/*TestVertex v1;
+	TestVertex v2;
+
+	double start = (double)SDL_GetPerformanceCounter() / SDL_GetPerformanceFrequency();
+	for ( int i = 0; i < 10000000; ++i ) {
+		TestVertex v3 = Lerp(v1, v2, 0.5);
+	}
+	double end = (double)SDL_GetPerformanceCounter() / SDL_GetPerformanceFrequency();
+	std::cout << (end - start) << std::endl;
+	return 0;*/
 
 	SDL_Init(SDL_INIT_VIDEO);
 

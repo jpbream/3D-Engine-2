@@ -13,7 +13,9 @@ private:
 	public:
 		Vec4 position;
 		Vec3 normal;
-
+	private:
+		float padding = 0;
+	public:
 		CowVertex();
 		CowVertex(const Vec4& position, const Vec3& normal);
 	};
@@ -24,7 +26,9 @@ private:
 		Vec3 normal;
 		Vec3 worldPos;
 		Vec3 shadow;
-
+	private:
+		float padding[3];
+	public:
 		CowPixel();
 
 		Vec4& GetPos() override;
